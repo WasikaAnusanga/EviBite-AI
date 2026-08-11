@@ -37,13 +37,13 @@ The system is designed as a **four-agent cooperative AI architecture** coordinat
 
 ```mermaid
 graph TD
-    Client["User / Client App (React UI / Postman)"] -->|POST /api/chat| Security["Cross-Cutting Security & Validation Layer"]
-    Security -->|Sanitized Request| Orchestrator["Orchestrator Engine (Member 1)"]
+    Client["User / Client App"] -->|POST /api/chat| Security["Cross-Cutting Security Layer"]
+    Security -->|Sanitized Request| Orchestrator["Orchestrator Engine - Member 1"]
     
-    subgraph Agent1["Agent 1: Triage & Routing (Member 1)"]
+    subgraph Agent1["Agent 1: Triage & Routing - Member 1"]
         TriageService["Triage Service"]
-        GeminiLLM["Gemini 2.5 Flash / OpenAI Struct Extractor"]
-        HeuristicFallback["Upgraded Rule-Based Fallback Parser"]
+        GeminiLLM["Gemini 2.5 Flash / OpenAI Extractor"]
+        HeuristicFallback["Rule-Based Fallback Parser"]
         SafetyRules["Deterministic Safety & Risk Escalation"]
         
         TriageService --> GeminiLLM
@@ -54,11 +54,11 @@ graph TD
     Orchestrator -->|1. Parse Query & Route| Agent1
     Agent1 -->|TriageOutput + Route Decision| Orchestrator
 
-    subgraph Agent2["Agent 2: Product Retrieval (Member 2)"]
+    subgraph Agent2["Agent 2: Product Retrieval - Member 2"]
         RetrievalService["Retrieval Agent Service"]
         SourceAdapter["ProductSource Interface Adapter"]
         OFF_API["Open Food Facts API"]
-        StoreDB[("Future Supermarket Catalogue DB (Price/Stock)")]
+        StoreDB[("Future Supermarket Catalogue DB")]
         
         RetrievalService --> SourceAdapter
         SourceAdapter --> OFF_API
@@ -68,7 +68,7 @@ graph TD
     Orchestrator -->|2. Fetch Product Data| Agent2
     Agent2 -->|Evidence Candidates| Orchestrator
 
-    subgraph Agent3["Agent 3: Nutrition & Allergen Analysis (Member 3)"]
+    subgraph Agent3["Agent 3: Nutrition & Allergen Analysis - Member 3"]
         AnalysisService["Analysis Agent Service"]
         AllergenChecker["Allergen Conflict Engine"]
         DietaryChecker["Dietary Suitability Engine"]
@@ -79,10 +79,10 @@ graph TD
         AnalysisService --> UncertaintyEngine
     end
 
-    Orchestrator -->|3. Safety & Nutrition Analysis (if required)| Agent3
+    Orchestrator -->|3. Safety & Nutrition Analysis| Agent3
     Agent3 -->|Analysis Findings & Safety Status| Orchestrator
 
-    subgraph Agent4["Agent 4: Recommendation & Response (Member 4)"]
+    subgraph Agent4["Agent 4: Recommendation & Response - Member 4"]
         ResponseService["Response Generation Agent"]
         LLMGrounding["LLM Grounded Response Generator"]
         TopKRanker["Candidate Recommendation Ranker"]
