@@ -1,7 +1,10 @@
 import json
 import os
 from typing import Any
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+load_dotenv()
 
 from backend.app.models.triage import (
     Constraint,
@@ -57,26 +60,89 @@ class TriageLLMExtraction(BaseModel):
 
 
 EXTRACTION_PROMPT_TEMPLATE = """You are the Triage & Routing Agent for EviBite AI, a supermarket product intelligence assistant.
-Your task is to analyze user queries about packaged food products and extract structured JSON matching the requested schema.
+Your task is to analyze user queries about packaged food products and extract structured JSON matching the exact schema below.
 
-Available Intent classes:
-- product_search: Questions about product details, ingredients, or general product queries.
-- barcode_lookup: Exact barcode search.
-- allergen_query: Questions asking about allergens, allergy safety, or "contains" questions.
-- nutrition_query: Questions about nutrient values (sugars, protein, fat, calories, sodium, etc.).
-- comparison: Queries comparing two or more products or asking which option has lower/higher nutrient values.
-- dietary_query: Questions about dietary suitability (vegan, vegetarian, gluten-free, dairy-free).
-- recommendation: Requests to recommend or suggest products matching constraints or preferences.
-- unknown: Irrelevant or completely unsupported queries.
+CRITICAL INTENT STRINGS (YOU MUST USE ONLY THESE EXACT STRINGS FOR primary_intent AND secondary_intents):
+- "product_search"
+- "barcode_lookup"
+- "allergen_query"
+- "nutrition_query"
+- "comparison"
+- "dietary_query"
+- "recommendation"
+- "unknown"
 
 Rules:
 1. Multi-intent queries: If the user asks about an allergy AND nutrition (e.g. "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"), set primary_intent to "allergen_query" and secondary_intents to ["nutrition_query"].
-2. Decompose multi-intent queries into subtasks array with "intent", "query_fragment", and "target_fields".
-3. Product entities: Extract exact product names (e.g. "Nutella", "Coca-Cola Zero").
-4. Canonical terms: Normalize allergens to lowercase canonical names (peanut, milk, egg, soy, gluten, nuts). Normalize nutrients to lowercase canonical names (sugars, protein, fat, sodium, energy).
+2. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
+3. Allergens: List canonical allergen names (e.g. ["peanut"]).
+4. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
+
+Expected JSON format:
+{
+  "primary_intent": "allergen_query",
+  "secondary_intents": ["nutrition_query"],
+  "products": [{"name": "Nutella"}],
+  "category": null,
+  "allergens": ["peanut"],
+  "dietary_requirements": [],
+  "nutrients": ["sugars"],
+  "requested_fields": ["allergens", "ingredients", "sugars"],
+  "constraints": [],
+  "subtasks": [
+    {"intent": "allergen_query", "query_fragment": "peanut allergy check", "target_fields": ["allergens"]},
+    {"intent": "nutrition_query", "query_fragment": "sugar content check", "target_fields": ["sugars"]}
+  ],
+  "unsupported_requirements": []
+}
 
 User query: "{query}"
 """
+
+
+INTENT_MAP = {
+    "allergy": Intent.ALLERGEN_QUERY,
+    "allergen": Intent.ALLERGEN_QUERY,
+    "check_allergy_safety": Intent.ALLERGEN_QUERY,
+    "nutrition": Intent.NUTRITION_QUERY,
+    "search": Intent.PRODUCT_SEARCH,
+    "product": Intent.PRODUCT_SEARCH,
+    "compare": Intent.COMPARISON,
+    "diet": Intent.DIETARY_QUERY,
+    "recommend": Intent.RECOMMENDATION,
+}
+
+
+def _normalize_intent(value: Any) -> Intent:
+    if not isinstance(value, str):
+        return Intent.UNKNOWN
+    val = value.lower().strip()
+    try:
+        return Intent(val)
+    except ValueError:
+        for k, v in INTENT_MAP.items():
+            if k in val:
+                return v
+        return Intent.UNKNOWN
+
+
+def _normalize_llm_json(data: dict) -> dict:
+    data["primary_intent"] = _normalize_intent(data.get("primary_intent"))
+    
+    sec_intents = data.get("secondary_intents", [])
+    if isinstance(sec_intents, list):
+        data["secondary_intents"] = [_normalize_intent(i) for i in sec_intents]
+
+    products = data.get("products", [])
+    norm_products = []
+    if isinstance(products, list):
+        for p in products:
+            if isinstance(p, str):
+                norm_products.append({"name": p})
+            elif isinstance(p, dict):
+                norm_products.append(p)
+    data["products"] = norm_products
+    return data
 
 
 def extract_with_llm(query: str) -> TriageLLMExtraction | None:
@@ -101,18 +167,25 @@ def extract_with_llm(query: str) -> TriageLLMExtraction | None:
         client = genai.Client(api_key=api_key)
         prompt = EXTRACTION_PROMPT_TEMPLATE.format(query=query)
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=TriageLLMExtraction,
-                temperature=0.1,
-            ),
-        )
-        if response.text:
-            data = json.loads(response.text)
-            return TriageLLMExtraction.model_validate(data)
+        for model_name in ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-1.5-flash"]:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                    ),
+                )
+                if response.text:
+                    raw_text = response.text.strip()
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                    data = json.loads(raw_text)
+                    normalized_data = _normalize_llm_json(data)
+                    return TriageLLMExtraction.model_validate(normalized_data)
+            except Exception:
+                continue
     except Exception:
         pass
 

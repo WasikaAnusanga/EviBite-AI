@@ -138,6 +138,7 @@ def _heuristic_triage(message: str) -> dict:
     has_recommendation = any(
         phrase in text for phrase in ["recommend", "suggest", "show me", "find me", "good options", "alternative"]
     )
+    has_dietary = bool(dietary)
 
     primary_intent = Intent.UNKNOWN
     secondary_intents: list[Intent] = []
