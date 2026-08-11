@@ -31,53 +31,90 @@ The core prototype uses Open Food Facts first. Retailer-specific data such as br
 
 ## 2. Multi-Agent Architecture
 
-The system contains four main agents.
+The system is designed as a **four-agent cooperative AI architecture** coordinated by a central Orchestration Engine and protected by a cross-cutting security layer.
 
-```text
-User
- │
- ▼
-Cross-Cutting Security Layer
- │
- ▼
-Agent 1 – Triage & Routing
- │
- ▼
-Agent 2 – Product Information Retrieval
- │
- ▼
-Agent 3 – Nutrition & Allergen Analysis
- │
- ▼
-Agent 4 – Recommendation & Response
- │
- ▼
-User
+### System Architecture Diagram
+
+```mermaid
+graph TD
+    Client["User / Client App (React UI / Postman)"] -->|POST /api/chat| Security["Cross-Cutting Security & Validation Layer"]
+    Security -->|Sanitized Request| Orchestrator["Orchestrator Engine (Member 1)"]
+    
+    subgraph Agent1["Agent 1: Triage & Routing (Member 1)"]
+        TriageService["Triage Service"]
+        GeminiLLM["Gemini 2.5 Flash / OpenAI Struct Extractor"]
+        HeuristicFallback["Upgraded Rule-Based Fallback Parser"]
+        SafetyRules["Deterministic Safety & Risk Escalation"]
+        
+        TriageService --> GeminiLLM
+        GeminiLLM -.->|Fallback if offline| HeuristicFallback
+        TriageService --> SafetyRules
+    end
+
+    Orchestrator -->|1. Parse Query & Route| Agent1
+    Agent1 -->|TriageOutput + Route Decision| Orchestrator
+
+    subgraph Agent2["Agent 2: Product Retrieval (Member 2)"]
+        RetrievalService["Retrieval Agent Service"]
+        SourceAdapter["ProductSource Interface Adapter"]
+        OFF_API["Open Food Facts API"]
+        StoreDB[("Future Supermarket Catalogue DB (Price/Stock)")]
+        
+        RetrievalService --> SourceAdapter
+        SourceAdapter --> OFF_API
+        SourceAdapter -.-> StoreDB
+    end
+
+    Orchestrator -->|2. Fetch Product Data| Agent2
+    Agent2 -->|Evidence Candidates| Orchestrator
+
+    subgraph Agent3["Agent 3: Nutrition & Allergen Analysis (Member 3)"]
+        AnalysisService["Analysis Agent Service"]
+        AllergenChecker["Allergen Conflict Engine"]
+        DietaryChecker["Dietary Suitability Engine"]
+        UncertaintyEngine["Uncertainty & Safety Assigner"]
+        
+        AnalysisService --> AllergenChecker
+        AnalysisService --> DietaryChecker
+        AnalysisService --> UncertaintyEngine
+    end
+
+    Orchestrator -->|3. Safety & Nutrition Analysis (if required)| Agent3
+    Agent3 -->|Analysis Findings & Safety Status| Orchestrator
+
+    subgraph Agent4["Agent 4: Recommendation & Response (Member 4)"]
+        ResponseService["Response Generation Agent"]
+        LLMGrounding["LLM Grounded Response Generator"]
+        TopKRanker["Candidate Recommendation Ranker"]
+        
+        ResponseService --> TopKRanker
+        ResponseService --> LLMGrounding
+    end
+
+    Orchestrator -->|4. Generate Grounded Answer| Agent4
+    Agent4 -->|Final Evidence-Grounded Answer| Orchestrator
+
+    Orchestrator -->|Trace ID + Execution Steps + Final Answer| Client
 ```
 
-The actual path is conditional. Not every query must pass through every agent.
+---
 
-Examples:
+### Conditional Execution Paths
 
-```text
-Product Information
-Triage → Retrieval → Response
-```
+Not every query must pass through every agent. The Orchestrator engine dynamically triggers execution paths based on Triage intent and safety requirements:
 
-```text
-Barcode Lookup
-Triage → Retrieval (Exact) → Response
-```
-
-```text
-Allergen / Nutrition / Dietary Query
-Triage → Retrieval → Analysis → Response
-```
-
-```text
-Recommendation
-Triage → Retrieval (Top-K) → Analysis → Recommendation/Response
-```
+1. **Simple Product Information**:
+   `Triage` $\rightarrow$ `Retrieval` $\rightarrow$ `Response`
+2. **Exact Barcode Lookup**:
+   `Triage` $\rightarrow$ `Retrieval(Exact)` $\rightarrow$ `Response`
+3. **Allergen / Nutrition / Dietary Safety Query**:
+   `Triage` $\rightarrow$ `Retrieval` $\rightarrow$ `Analysis` $\rightarrow$ `Response` *(Forces RiskLevel.HIGH and analysis reasoning)*
+4. **Product Recommendation & Comparison**:
+   `Triage` $\rightarrow$ `Retrieval(Top-K)` $\rightarrow$ `Analysis` $\rightarrow$ `Recommendation/Response`
+5. **Missing Product Clarification**:
+   `Triage` $\rightarrow$ Stops immediately & requests user clarification.
+6. **Out-of-Domain / Unsupported Query**:
+   `Triage` $\rightarrow$ `Response` *(Direct polite refusal)*
 
 ---
 
