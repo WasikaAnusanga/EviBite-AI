@@ -342,13 +342,16 @@ From the project root:
 pip install -r requirements.txt
 ```
 
-Initial backend dependencies include:
+Backend dependencies include:
 
 ```text
 fastapi
 uvicorn[standard]
 pydantic
 pytest
+google-genai
+httpx
+python-dotenv
 ```
 
 Additional dependencies required by individual agents can be added later through reviewed pull requests.
@@ -373,13 +376,13 @@ cp .env.example .env
 
 Never commit `.env`.
 
-Example:
+Add your Gemini API Key to `.env`:
 
 ```env
-LLM_API_KEY=
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Open Food Facts does not provide the core product knowledge from a local custom dataset in the MVP. The Retrieval Agent will retrieve product information from the external Open Food Facts source.
+*(Note: If no API key is provided, the backend automatically uses the built-in rule-based heuristic parser for local offline testing).*
 
 ---
 
@@ -643,35 +646,210 @@ Some agents can be developed in parallel once the shared contracts are stable.
 ## 20. Current Development Status
 
 ```text
-Repository initialization        In Progress
-Shared project structure         In Progress
-Shared message contracts         In Progress
-Agent 1 – Triage                 Development
-Agent 2 – Retrieval              Not yet integrated
-Agent 3 – Analysis               Not yet integrated
-Agent 4 – Response               Not yet integrated
-Frontend                         Not started
-End-to-end integration           Not started
+Repository initialization        Completed
+Shared project structure         Completed
+Shared message contracts         Completed
+Agent 1 – Triage & Routing       COMPLETED (Member 1 - Gemini LLM + Heuristics)
+Orchestration Engine             COMPLETED (Member 1 - POST /api/chat)
+Unit Test Suite                  COMPLETED (10/10 Pytest Passed)
+Agent 2 – Retrieval              Pending Teammate Integration (Member 2)
+Agent 3 – Analysis               Pending Teammate Integration (Member 3)
+Agent 4 – Response               Pending Teammate Integration (Member 4)
+Frontend UI                      Pending Teammate Integration (Member 4)
 ```
-
-Update this section as development progresses.
 
 ---
 
-## 21. Contributors
+## 21. Guide for Teammates (Member 2, Member 3, Member 4)
 
-| Member | Responsibility |
-|---|---|
-| Member 1 | Triage & Routing Agent + Communication / Orchestration |
-| Member 2 | Product Information Retrieval Agent |
-| Member 3 | Nutrition & Allergen Analysis Agent + Security / Responsible AI |
-| Member 4 | Recommendation & Response Agent + Frontend / Deployment |
+Welcome team! **Member 1** has completed **Agent 1 (Triage & Routing)**, the **Gemini LLM Extraction Engine**, the **Multi-Agent Orchestrator Engine**, and the **FastAPI REST API**.
+
+The backend system runs end-to-end today! You can start building your assigned agents immediately by plugging into the prepared folder structure and replacing the stub functions in `backend/app/agents/agent_stubs.py`.
+
+---
+
+### What Member 1 Has Built for You:
+1. **Agent 1 (Triage & Routing Agent)** (`backend/app/agents/triage/`):
+   - Automatically extracts user intent (`allergen_query`, `nutrition_query`, `comparison`, `product_search`, `barcode_lookup`, `dietary_query`, `recommendation`, `unknown`).
+   - Extracts product names, brands, barcodes, categories, allergens, nutrients, dietary requirements, requested fields, and constraints.
+   - Powered by **Gemini 2.5 Flash** structured extraction with robust rule-based fallback.
+   - Escalates allergen queries to `RiskLevel.HIGH` and determines execution paths.
+2. **Orchestrator Engine** (`backend/app/orchestration/orchestrator.py`):
+   - Receives incoming user messages at `POST /api/chat`, passes data through Triage $\rightarrow$ Retrieval $\rightarrow$ Analysis $\rightarrow$ Response, tracks Request Trace IDs (`REQ-XXXXXX`), and logs execution steps.
+3. **Clean Contract Stubs** (`backend/app/agents/agent_stubs.py`):
+   - Contains typed request/response Pydantic schemas and stub functions for Agents 2, 3, and 4.
+
+---
+
+### Exact JSON Output Format Produced by Agent 1 (`POST /agents/triage`)
+
+Your teammates can copy and use these exact JSON objects returned by Agent 1 for their agent development:
+
+#### Example 1: Multi-Intent Allergen & Nutrition Query
+**User Query**: *"I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"*
+
+```json
+{
+  "trace_id": "REQ-72718B96",
+  "triage_status": "READY",
+  "input_type": "natural_language",
+  "original_query": "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?",
+  "primary_intent": "allergen_query",
+  "secondary_intents": [
+    "nutrition_query"
+  ],
+  "products": [
+    {
+      "name": "Nutella",
+      "brand": null,
+      "barcode": null
+    }
+  ],
+  "category": null,
+  "requested_fields": [
+    "allergens",
+    "ingredients",
+    "sugars"
+  ],
+  "allergens": [
+    "peanut"
+  ],
+  "dietary_requirements": [],
+  "nutrients": [
+    "sugars"
+  ],
+  "constraints": [],
+  "preferences": {},
+  "comparison": {
+    "metric": null,
+    "goal": null
+  },
+  "subtasks": [
+    {
+      "intent": "allergen_query",
+      "query_fragment": "allergen safety check",
+      "target_fields": ["allergens", "ingredients"]
+    },
+    {
+      "intent": "nutrition_query",
+      "query_fragment": "nutrient value check",
+      "target_fields": ["sugars"]
+    }
+  ],
+  "risk_level": "HIGH",
+  "unsupported_requirements": [],
+  "clarification": {
+    "required": false,
+    "missing_fields": [],
+    "question": null
+  },
+  "routing": {
+    "next_agent": "retrieval",
+    "required_agents": [
+      "retrieval",
+      "analysis",
+      "response"
+    ],
+    "analysis_required": true
+  }
+}
+```
+
+#### Example 2: Product Comparison Query
+**User Query**: *"Which cereal has less sugar and more protein, Cheerios or Special K?"*
+
+```json
+{
+  "trace_id": "REQ-28DE19B4",
+  "triage_status": "READY",
+  "input_type": "natural_language",
+  "original_query": "Which cereal has less sugar and more protein, Cheerios or Special K?",
+  "primary_intent": "comparison",
+  "secondary_intents": [],
+  "products": [],
+  "category": "cereal",
+  "requested_fields": [
+    "sugars",
+    "protein"
+  ],
+  "allergens": [],
+  "dietary_requirements": [],
+  "nutrients": [
+    "sugars",
+    "protein"
+  ],
+  "risk_level": "MEDIUM",
+  "routing": {
+    "next_agent": "retrieval",
+    "required_agents": [
+      "retrieval",
+      "analysis",
+      "response"
+    ],
+    "analysis_required": true
+  }
+}
+```
+
+---
+
+### How Each Member Can Start Building:
+
+#### 🔹 Member 2: Product Information Retrieval Agent (Agent 2)
+* **Your Main Task**: Retrieve real packaged food records from Open Food Facts API, filter candidates, calculate evidence completeness, and rank Top-K candidates.
+* **Where to code**:
+  - Main Agent folder: `backend/app/agents/retrieval/`
+  - Source adapters: `backend/app/sources/` (`open_food_facts.py`, `base.py`)
+* **What you receive from Member 1's Orchestrator**:
+  - `RetrievalRequest`: `trace_id`, `query`, `intent`, `products` (e.g. `[{"name": "Nutella"}]`), `category`, `requested_fields`.
+* **What you produce**:
+  - `RetrievalResponse`: List of `EvidenceObject` candidates containing `name`, `brand`, `ingredients_text`, `allergens`, `nutrition` dictionary, and `completeness` score.
+* **How to connect**:
+  - Connect your `backend/app/agents/retrieval/service.py` to `stub_retrieval_service()` in `backend/app/agents/agent_stubs.py`.
+
+---
+
+#### 🔹 Member 3: Nutrition & Allergen Analysis Agent (Agent 3)
+* **Your Main Task**: Perform food safety reasoning over retrieved evidence, detect allergen conflicts, evaluate dietary constraints, determine safety statuses (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), and implement security middleware.
+* **Where to code**:
+  - Main Agent folder: `backend/app/agents/nutrition_allergen/`
+  - Security folder: `backend/app/security/`
+* **What you receive from Member 1 & Member 2**:
+  - `AnalysisRequest`: `trace_id`, `primary_intent`, `allergens`, `nutrients`, `dietary_requirements`, and retrieved `evidence` candidates.
+* **What you produce**:
+  - `AnalysisResponse`: `safety_status` (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), `risk_level`, `findings` (bullet points explaining reasons), and `uncertainty_reasons`.
+* **How to connect**:
+  - Connect your `backend/app/agents/nutrition_allergen/service.py` to `stub_analysis_service()` in `backend/app/agents/agent_stubs.py`.
+
+---
+
+#### 🔹 Member 4: Recommendation & Response Agent (Agent 4)
+* **Your Main Task**: Generate natural-language grounded responses (no unsupported factual claims), rank recommendations, and format refusal/uncertainty wording. *(Note: Frontend UI development will be built together as a team later).*
+* **Where to code**:
+  - Main Agent folder: `backend/app/agents/recommendation_response/`
+* **What you receive from Member 1, 2 & 3**:
+  - `ResponseRequest`: `trace_id`, `query`, `intent`, `triage_status`, `evidence`, and `analysis`.
+* **What you produce**:
+  - `ResponseResponse`: User-facing `answer` string grounded in verified evidence.
+* **How to connect**:
+  - Connect your `backend/app/agents/recommendation_response/service.py` to `stub_response_service()` in `backend/app/agents/agent_stubs.py`.
+
+---
+
+## 22. Contributors
+
+| Member | Responsibility | Status |
+|---|---|---|
+| Member 1 | Triage & Routing Agent + Communication / Orchestration | **Completed** |
+| Member 2 | Product Information Retrieval Agent | Pending Integration |
+| Member 3 | Nutrition & Allergen Analysis Agent + Security / Responsible AI | Pending Integration |
+| Member 4 | Recommendation & Response Agent + Frontend / Deployment | Pending Integration |
 
 Replace `Member 1`, `Member 2`, etc. with actual names before final submission.
 
 ---
 
-## 22. Project Scope Limitation
+## 23. Project Scope Limitation
 
 The first version of EviBite AI uses Open Food Facts for packaged-product information.
 
@@ -685,3 +863,4 @@ The MVP does not currently provide:
 - Checkout or payment functionality
 
 The retrieval architecture is intended to allow supermarket-specific sources to be added later without redesigning the four-agent architecture.
+
