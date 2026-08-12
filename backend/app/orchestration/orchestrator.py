@@ -10,9 +10,9 @@ from backend.app.agents.agent_stubs import (
     RetrievalRequest,
     ResponseRequest,
     stub_analysis_service,
-    stub_retrieval_service,
     stub_response_service,
 )
+from backend.app.agents.retrieval.service import retrieval_service
 from backend.app.agents.triage.service import triage_message
 from backend.app.models.messages import ChatRequest, ChatResponse, ExecutionStep
 from backend.app.models.triage import RouteAgent, TriageRequest, TriageStatus
@@ -91,7 +91,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         category=triage_output.category,
         requested_fields=triage_output.requested_fields,
     )
-    retrieval_res = stub_retrieval_service(retrieval_req)
+    retrieval_res = retrieval_service(retrieval_req)
     execution_steps.append(
         ExecutionStep(
             agent="retrieval",
