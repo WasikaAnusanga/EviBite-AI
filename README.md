@@ -688,8 +688,8 @@ Shared project structure         Completed
 Shared message contracts         Completed
 Agent 1 – Triage & Routing       COMPLETED (Member 1 - Gemini LLM + Heuristics)
 Orchestration Engine             COMPLETED (Member 1 - POST /api/chat)
-Unit Test Suite                  COMPLETED (10/10 Pytest Passed)
-Agent 2 – Retrieval              Pending Teammate Integration (Member 2)
+Agent 2 – Retrieval              COMPLETED (Member 2 - Open Food Facts + Source Abstraction + Ranking + Caching)
+Unit Test Suite                  COMPLETED (18/18 Pytest Passed)
 Agent 3 – Analysis               Pending Teammate Integration (Member 3)
 Agent 4 – Response               Pending Teammate Integration (Member 4)
 Frontend UI                      Pending Teammate Integration (Member 4)
@@ -697,166 +697,53 @@ Frontend UI                      Pending Teammate Integration (Member 4)
 
 ---
 
-## 21. Guide for Teammates (Member 2, Member 3, Member 4)
+## 21. Guide for Teammates (Member 3, Member 4)
 
-Welcome team! **Member 1** has completed **Agent 1 (Triage & Routing)**, the **Gemini LLM Extraction Engine**, the **Multi-Agent Orchestrator Engine**, and the **FastAPI REST API**.
+Welcome team! **Member 1** has completed **Agent 1 (Triage & Routing)**, the **Gemini LLM Extraction Engine**, the **Multi-Agent Orchestrator Engine**, and the **FastAPI REST API**.  
+**Member 2** has completed **Agent 2 (Product Information Retrieval Agent)**, the **Open Food Facts API Adapter**, the **Data-Source Abstraction Layer**, **Field Completeness Scoring**, **Top-K Ranking**, and **Response Caching**.
 
-The backend system runs end-to-end today! You can start building your assigned agents immediately by plugging into the prepared folder structure and replacing the stub functions in `backend/app/agents/agent_stubs.py`.
+The backend system runs end-to-end today with real Open Food Facts evidence retrieval! **Member 3** and **Member 4** can start building your assigned agents immediately by plugging into the prepared folder structure and replacing the stub functions in `backend/app/agents/agent_stubs.py`.
 
 ---
 
-### What Member 1 Has Built for You:
+### What Member 1 & Member 2 Have Built for You:
+
 1. **Agent 1 (Triage & Routing Agent)** (`backend/app/agents/triage/`):
    - Automatically extracts user intent (`allergen_query`, `nutrition_query`, `comparison`, `product_search`, `barcode_lookup`, `dietary_query`, `recommendation`, `unknown`).
    - Extracts product names, brands, barcodes, categories, allergens, nutrients, dietary requirements, requested fields, and constraints.
-   - Powered by **Gemini 2.5 Flash** structured extraction with robust rule-based fallback.
    - Escalates allergen queries to `RiskLevel.HIGH` and determines execution paths.
-2. **Orchestrator Engine** (`backend/app/orchestration/orchestrator.py`):
+
+2. **Agent 2 (Product Information Retrieval Agent)** (`backend/app/agents/retrieval/` & `backend/app/sources/`):
+   - `ProductSource` interface (`backend/app/sources/base.py`) for data-source abstraction.
+   - `OpenFoodFactsSource` (`backend/app/sources/open_food_facts.py`) fetching real packaged food evidence from Open Food Facts REST API.
+   - Multi-strategy retrieval (exact barcode lookup, product name search, category/keyword search).
+   - Dynamic field completeness scoring & Top-K candidate ranking (`backend/app/agents/retrieval/service.py`).
+   - In-memory response caching for reliability and low latency.
+   - Produces normalized `EvidenceObject` candidates containing:
+     - `product_id`, `name`, `brand`, `barcode`, `categories`
+     - `ingredients_text`
+     - `allergens` (normalized tags like `["hazelnut", "milk", "soy"]`)
+     - `nutrition` (dict containing `sugars_g_100g`, `protein_g_100g`, `fat_g_100g`, `energy_kcal_100g`, `sodium_mg_100g`, etc.)
+     - `completeness` (float 0.0 to 1.0)
+
+3. **Orchestrator Engine** (`backend/app/orchestration/orchestrator.py`):
    - Receives incoming user messages at `POST /api/chat`, passes data through Triage $\rightarrow$ Retrieval $\rightarrow$ Analysis $\rightarrow$ Response, tracks Request Trace IDs (`REQ-XXXXXX`), and logs execution steps.
-3. **Clean Contract Stubs** (`backend/app/agents/agent_stubs.py`):
-   - Contains typed request/response Pydantic schemas and stub functions for Agents 2, 3, and 4.
 
 ---
 
-### Exact JSON Output Format Produced by Agent 1 (`POST /agents/triage`)
-
-Your teammates can copy and use these exact JSON objects returned by Agent 1 for their agent development:
-
-#### Example 1: Multi-Intent Allergen & Nutrition Query
-**User Query**: *"I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"*
-
-```json
-{
-  "trace_id": "REQ-72718B96",
-  "triage_status": "READY",
-  "input_type": "natural_language",
-  "original_query": "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?",
-  "primary_intent": "allergen_query",
-  "secondary_intents": [
-    "nutrition_query"
-  ],
-  "products": [
-    {
-      "name": "Nutella",
-      "brand": null,
-      "barcode": null
-    }
-  ],
-  "category": null,
-  "requested_fields": [
-    "allergens",
-    "ingredients",
-    "sugars"
-  ],
-  "allergens": [
-    "peanut"
-  ],
-  "dietary_requirements": [],
-  "nutrients": [
-    "sugars"
-  ],
-  "constraints": [],
-  "preferences": {},
-  "comparison": {
-    "metric": null,
-    "goal": null
-  },
-  "subtasks": [
-    {
-      "intent": "allergen_query",
-      "query_fragment": "allergen safety check",
-      "target_fields": ["allergens", "ingredients"]
-    },
-    {
-      "intent": "nutrition_query",
-      "query_fragment": "nutrient value check",
-      "target_fields": ["sugars"]
-    }
-  ],
-  "risk_level": "HIGH",
-  "unsupported_requirements": [],
-  "clarification": {
-    "required": false,
-    "missing_fields": [],
-    "question": null
-  },
-  "routing": {
-    "next_agent": "retrieval",
-    "required_agents": [
-      "retrieval",
-      "analysis",
-      "response"
-    ],
-    "analysis_required": true
-  }
-}
-```
-
-#### Example 2: Product Comparison Query
-**User Query**: *"Which cereal has less sugar and more protein, Cheerios or Special K?"*
-
-```json
-{
-  "trace_id": "REQ-28DE19B4",
-  "triage_status": "READY",
-  "input_type": "natural_language",
-  "original_query": "Which cereal has less sugar and more protein, Cheerios or Special K?",
-  "primary_intent": "comparison",
-  "secondary_intents": [],
-  "products": [],
-  "category": "cereal",
-  "requested_fields": [
-    "sugars",
-    "protein"
-  ],
-  "allergens": [],
-  "dietary_requirements": [],
-  "nutrients": [
-    "sugars",
-    "protein"
-  ],
-  "risk_level": "MEDIUM",
-  "routing": {
-    "next_agent": "retrieval",
-    "required_agents": [
-      "retrieval",
-      "analysis",
-      "response"
-    ],
-    "analysis_required": true
-  }
-}
-```
-
----
-
-### How Each Member Can Start Building:
-
-#### 🔹 Member 2: Product Information Retrieval Agent (Agent 2)
-* **Your Main Task**: Retrieve real packaged food records from Open Food Facts API, filter candidates, calculate evidence completeness, and rank Top-K candidates.
-* **Where to code**:
-  - Main Agent folder: `backend/app/agents/retrieval/`
-  - Source adapters: `backend/app/sources/` (`open_food_facts.py`, `base.py`)
-* **What you receive from Member 1's Orchestrator**:
-  - `RetrievalRequest`: `trace_id`, `query`, `intent`, `products` (e.g. `[{"name": "Nutella"}]`), `category`, `requested_fields`.
-* **What you produce**:
-  - `RetrievalResponse`: List of `EvidenceObject` candidates containing `name`, `brand`, `ingredients_text`, `allergens`, `nutrition` dictionary, and `completeness` score.
-* **How to connect**:
-  - Connect your `backend/app/agents/retrieval/service.py` to `stub_retrieval_service()` in `backend/app/agents/agent_stubs.py`.
-
----
+### How Remaining Members Can Build Their Agents:
 
 #### 🔹 Member 3: Nutrition & Allergen Analysis Agent (Agent 3)
-* **Your Main Task**: Perform food safety reasoning over retrieved evidence, detect allergen conflicts, evaluate dietary constraints, determine safety statuses (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), and implement security middleware.
+* **Your Main Task**: Perform food safety reasoning over retrieved evidence candidates (`EvidenceObject`), detect allergen conflicts, evaluate dietary constraints, determine safety statuses (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), and implement security middleware.
 * **Where to code**:
   - Main Agent folder: `backend/app/agents/nutrition_allergen/`
   - Security folder: `backend/app/security/`
 * **What you receive from Member 1 & Member 2**:
-  - `AnalysisRequest`: `trace_id`, `primary_intent`, `allergens`, `nutrients`, `dietary_requirements`, and retrieved `evidence` candidates.
+  - `AnalysisRequest`: `trace_id`, `primary_intent`, `allergens`, `nutrients`, `dietary_requirements`, and retrieved `evidence` candidates (list of `EvidenceObject`).
 * **What you produce**:
   - `AnalysisResponse`: `safety_status` (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), `risk_level`, `findings` (bullet points explaining reasons), and `uncertainty_reasons`.
 * **How to connect**:
-  - Connect your `backend/app/agents/nutrition_allergen/service.py` to `stub_analysis_service()` in `backend/app/agents/agent_stubs.py`.
+  - Connect your `backend/app/agents/nutrition_allergen/service.py` to `stub_analysis_service()` in `backend/app/agents/agent_stubs.py` or directly in `orchestrator.py`.
 
 ---
 
@@ -869,7 +756,7 @@ Your teammates can copy and use these exact JSON objects returned by Agent 1 for
 * **What you produce**:
   - `ResponseResponse`: User-facing `answer` string grounded in verified evidence.
 * **How to connect**:
-  - Connect your `backend/app/agents/recommendation_response/service.py` to `stub_response_service()` in `backend/app/agents/agent_stubs.py`.
+  - Connect your `backend/app/agents/recommendation_response/service.py` to `stub_response_service()` in `backend/app/agents/agent_stubs.py` or directly in `orchestrator.py`.
 
 ---
 
@@ -878,7 +765,7 @@ Your teammates can copy and use these exact JSON objects returned by Agent 1 for
 | Member | Responsibility | Status |
 |---|---|---|
 | Member 1 | Triage & Routing Agent + Communication / Orchestration | **Completed** |
-| Member 2 | Product Information Retrieval Agent | Pending Integration |
+| Member 2 | Product Information Retrieval Agent + Open Food Facts Source | **Completed** |
 | Member 3 | Nutrition & Allergen Analysis Agent + Security / Responsible AI | Pending Integration |
 | Member 4 | Recommendation & Response Agent + Frontend / Deployment | Pending Integration |
 
