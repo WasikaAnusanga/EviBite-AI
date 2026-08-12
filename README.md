@@ -702,36 +702,146 @@ Frontend UI                      Pending Teammate Integration (Member 4)
 Welcome team! **Member 1** has completed **Agent 1 (Triage & Routing)**, the **Gemini LLM Extraction Engine**, the **Multi-Agent Orchestrator Engine**, and the **FastAPI REST API**.  
 **Member 2** has completed **Agent 2 (Product Information Retrieval Agent)**, the **Open Food Facts API Adapter**, the **Data-Source Abstraction Layer**, **Field Completeness Scoring**, **Top-K Ranking**, and **Response Caching**.
 
-The backend system runs end-to-end today with real Open Food Facts evidence retrieval! **Member 3** and **Member 4** can start building your assigned agents immediately by plugging into the prepared folder structure and replacing the stub functions in `backend/app/agents/agent_stubs.py`.
+The backend system runs end-to-end today with real Open Food Facts evidence retrieval! **Member 3** and **Member 4** can start building your assigned agents immediately by plugging into the prepared folder structure and inspecting the exact outputs produced by Agent 1 and Agent 2 below.
 
 ---
 
-### What Member 1 & Member 2 Have Built for You:
+### What Member 1 Has Built for You (Agent 1 – Triage & Routing):
 
-1. **Agent 1 (Triage & Routing Agent)** (`backend/app/agents/triage/`):
+1. **Agent 1 Service** (`backend/app/agents/triage/`):
    - Automatically extracts user intent (`allergen_query`, `nutrition_query`, `comparison`, `product_search`, `barcode_lookup`, `dietary_query`, `recommendation`, `unknown`).
    - Extracts product names, brands, barcodes, categories, allergens, nutrients, dietary requirements, requested fields, and constraints.
+   - Powered by **Gemini 2.5 Flash** structured extraction with robust rule-based fallback.
    - Escalates allergen queries to `RiskLevel.HIGH` and determines execution paths.
 
-2. **Agent 2 (Product Information Retrieval Agent)** (`backend/app/agents/retrieval/` & `backend/app/sources/`):
-   - `ProductSource` interface (`backend/app/sources/base.py`) for data-source abstraction.
-   - `OpenFoodFactsSource` (`backend/app/sources/open_food_facts.py`) fetching real packaged food evidence from Open Food Facts REST API.
-   - Multi-strategy retrieval (exact barcode lookup, product name search, category/keyword search).
-   - Dynamic field completeness scoring & Top-K candidate ranking (`backend/app/agents/retrieval/service.py`).
-   - In-memory response caching for reliability and low latency.
-   - Produces normalized `EvidenceObject` candidates containing:
-     - `product_id`, `name`, `brand`, `barcode`, `categories`
-     - `ingredients_text`
-     - `allergens` (normalized tags like `["hazelnut", "milk", "soy"]`)
-     - `nutrition` (dict containing `sugars_g_100g`, `protein_g_100g`, `fat_g_100g`, `energy_kcal_100g`, `sodium_mg_100g`, etc.)
-     - `completeness` (float 0.0 to 1.0)
-
-3. **Orchestrator Engine** (`backend/app/orchestration/orchestrator.py`):
+2. **Orchestrator Engine** (`backend/app/orchestration/orchestrator.py`):
    - Receives incoming user messages at `POST /api/chat`, passes data through Triage $\rightarrow$ Retrieval $\rightarrow$ Analysis $\rightarrow$ Response, tracks Request Trace IDs (`REQ-XXXXXX`), and logs execution steps.
+
+#### Exact JSON Output Format Produced by Agent 1 (`triage_output`):
+
+##### Example 1: Multi-Intent Allergen & Nutrition Query
+**User Query**: *"I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"*
+
+```json
+{
+  "trace_id": "REQ-72718B96",
+  "triage_status": "READY",
+  "input_type": "natural_language",
+  "original_query": "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?",
+  "primary_intent": "allergen_query",
+  "secondary_intents": ["nutrition_query"],
+  "products": [{"name": "Nutella", "brand": null, "barcode": null}],
+  "category": null,
+  "requested_fields": ["allergens", "ingredients", "sugars"],
+  "allergens": ["peanut"],
+  "dietary_requirements": [],
+  "nutrients": ["sugars"],
+  "risk_level": "HIGH",
+  "routing": {
+    "next_agent": "retrieval",
+    "required_agents": ["retrieval", "analysis", "response"],
+    "analysis_required": true
+  }
+}
+```
 
 ---
 
-### How Remaining Members Can Build Their Agents:
+### What Member 2 Has Built for You (Agent 2 – Product Information Retrieval):
+
+1. **Data-Source Abstraction Layer** (`backend/app/sources/base.py`):
+   - `ProductSource` interface with `get_by_barcode(barcode)` and `search(query, category, limit)` methods. This allows future supermarket catalog databases to sit alongside or replace Open Food Facts without changing agent contracts.
+
+2. **Open Food Facts API Adapter** (`backend/app/sources/open_food_facts.py`):
+   - Fetches real packaged food evidence from Open Food Facts REST API (`/api/v2/product/{barcode}.json` and `/cgi/search.pl`).
+   - Normalizes raw product JSON into standard `EvidenceObject` schema.
+   - In-memory response caching for fast, reliable demo performance and resilience against external API limits.
+
+3. **Retrieval Agent Service** (`backend/app/agents/retrieval/service.py`):
+   - Multi-strategy candidate retrieval (exact barcode, product name search, category/keyword search).
+   - Dynamic field completeness scoring & Top-K candidate ranking.
+   - Bounded query reformulation retry when initial search returns 0 candidates.
+   - Returns explicit status: `FOUND`, `PARTIAL`, `NOT_FOUND`, or `ERROR`.
+
+#### Exact Output Format Produced by Agent 2 (`RetrievalResponse` & `EvidenceObject`):
+
+##### Example 1: Evidence Candidates Output for Nutella Search (`retrieval_res`)
+
+```json
+{
+  "trace_id": "REQ-72718B96",
+  "status": "FOUND",
+  "candidates": [
+    {
+      "product_id": "off-3017620422003",
+      "name": "Nutella Hazelnut Spread",
+      "brand": "Ferrero",
+      "barcode": "3017620422003",
+      "categories": ["spreads", "hazelnut spreads", "sweet spreads"],
+      "ingredients_text": "Sugar, palm oil, hazelnuts (13%), skimmed milk powder (8.7%), fat-reduced cocoa (7.4%), emulsifier: lecithins (soy), vanillin.",
+      "allergens": ["hazelnut", "milk", "soy", "nuts"],
+      "nutrition": {
+        "sugars_g_100g": 56.3,
+        "protein_g_100g": 6.3,
+        "fat_g_100g": 30.9,
+        "energy_kcal_100g": 539.0,
+        "sodium_mg_100g": 43.0
+      },
+      "completeness": 0.95,
+      "source": "open_food_facts"
+    }
+  ]
+}
+```
+
+##### Example 2: Evidence Candidates Output for Cereal Comparison (`retrieval_res`)
+
+```json
+{
+  "trace_id": "REQ-28DE19B4",
+  "status": "FOUND",
+  "candidates": [
+    {
+      "product_id": "off-7613035654321",
+      "name": "Cheerios Honey & Oats Cereal",
+      "brand": "Nestle",
+      "barcode": "7613035654321",
+      "categories": ["cereals", "breakfasts"],
+      "ingredients_text": "Whole grain oat flour, sugar, oat bran, honey, salt.",
+      "allergens": ["oats"],
+      "nutrition": {
+        "sugars_g_100g": 9.3,
+        "protein_g_100g": 8.4,
+        "fat_g_100g": 3.8,
+        "energy_kcal_100g": 382.0
+      },
+      "completeness": 0.92,
+      "source": "open_food_facts"
+    },
+    {
+      "product_id": "off-5000167032104",
+      "name": "Special K Original Cereal",
+      "brand": "Kellogg's",
+      "barcode": "5000167032104",
+      "categories": ["cereals", "breakfasts"],
+      "ingredients_text": "Rice, wheat gluten, sugar, barley malt extract, salt.",
+      "allergens": ["wheat", "gluten", "barley"],
+      "nutrition": {
+        "sugars_g_100g": 14.0,
+        "protein_g_100g": 14.0,
+        "fat_g_100g": 1.5,
+        "energy_kcal_100g": 375.0
+      },
+      "completeness": 0.95,
+      "source": "open_food_facts"
+    }
+  ]
+}
+```
+
+---
+
+### How Remaining Members Can Build Their Workflows:
 
 #### 🔹 Member 3: Nutrition & Allergen Analysis Agent (Agent 3)
 * **Your Main Task**: Perform food safety reasoning over retrieved evidence candidates (`EvidenceObject`), detect allergen conflicts, evaluate dietary constraints, determine safety statuses (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), and implement security middleware.
@@ -739,7 +849,7 @@ The backend system runs end-to-end today with real Open Food Facts evidence retr
   - Main Agent folder: `backend/app/agents/nutrition_allergen/`
   - Security folder: `backend/app/security/`
 * **What you receive from Member 1 & Member 2**:
-  - `AnalysisRequest`: `trace_id`, `primary_intent`, `allergens`, `nutrients`, `dietary_requirements`, and retrieved `evidence` candidates (list of `EvidenceObject`).
+  - `AnalysisRequest`: `trace_id`, `primary_intent`, `allergens`, `nutrients`, `dietary_requirements`, and retrieved `evidence` candidates (list of `EvidenceObject` items shown above).
 * **What you produce**:
   - `AnalysisResponse`: `safety_status` (`SUITABLE`, `UNSUITABLE`, `UNCERTAIN`), `risk_level`, `findings` (bullet points explaining reasons), and `uncertainty_reasons`.
 * **How to connect**:
@@ -752,7 +862,7 @@ The backend system runs end-to-end today with real Open Food Facts evidence retr
 * **Where to code**:
   - Main Agent folder: `backend/app/agents/recommendation_response/`
 * **What you receive from Member 1, 2 & 3**:
-  - `ResponseRequest`: `trace_id`, `query`, `intent`, `triage_status`, `evidence`, and `analysis`.
+  - `ResponseRequest`: `trace_id`, `query`, `intent`, `triage_status`, `evidence` (from Member 2), and `analysis` (from Member 3).
 * **What you produce**:
   - `ResponseResponse`: User-facing `answer` string grounded in verified evidence.
 * **How to connect**:
