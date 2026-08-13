@@ -68,35 +68,10 @@ class AnalysisResponse(BaseModel):
 
 
 def stub_analysis_service(request: AnalysisRequest) -> AnalysisResponse:
-    """STUB FOR MEMBER 3: Nutrition & Allergen Analysis Agent."""
-    findings = []
-    safety_status = "SUITABLE"
-    risk_level = "LOW"
+    """Delegates to Member 3's Nutrition & Allergen Analysis Agent service."""
+    from backend.app.agents.nutrition_allergen.service import analysis_service
+    return analysis_service(request)
 
-    if request.allergens:
-        risk_level = "HIGH"
-        for ev in request.evidence:
-            matched_allergens = [a for a in request.allergens if a.lower() in [ea.lower() for ea in ev.allergens]]
-            if matched_allergens:
-                safety_status = "UNSUITABLE"
-                findings.append(f"Product '{ev.name}' contains allergen(s): {', '.join(matched_allergens)}.")
-            else:
-                findings.append(f"No direct conflict found for '{', '.join(request.allergens)}' in '{ev.name}'.")
-
-    if request.nutrients:
-        for ev in request.evidence:
-            for nut in request.nutrients:
-                val = ev.nutrition.get(f"{nut}_g_100g") or ev.nutrition.get(nut)
-                if val is not None:
-                    findings.append(f"'{ev.name}' contains {val}g of {nut} per 100g.")
-
-    return AnalysisResponse(
-        trace_id=request.trace_id,
-        safety_status=safety_status,
-        risk_level=risk_level,
-        findings=findings,
-        uncertainty_reasons=[],
-    )
 
 
 # ==========================================
