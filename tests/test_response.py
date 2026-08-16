@@ -59,3 +59,79 @@ def test_no_evidence_no_analysis_returns_not_found_message():
     result = response_service(request)
 
     assert "could not find" in result.answer.lower()
+
+from backend.app.agents.recommendation_response.service import rank_candidates
+from backend.app.agents.agent_stubs import EvidenceObject
+
+
+def _make_cereal(name, sugars, protein):
+    return EvidenceObject(
+        product_id=name.lower().replace(" ", "-"),
+        name=name,
+        brand="TestBrand",
+        nutrition={
+            "sugars_g_100g": sugars,
+            "protein_g_100g": protein,
+        },
+        completeness=0.9,
+        source="open_food_facts",
+    )
+
+
+def test_rank_candidates_prefers_lower_sugar():
+    high_sugar = _make_cereal("Sugary Puffs", sugars=30.0, protein=5.0)
+    low_sugar = _make_cereal("Bran Basics", sugars=5.0, protein=5.0)
+
+    ranked = rank_candidates(
+        evidence=[high_sugar, low_sugar],
+        query="cereal with less sugar",
+        nutrients=["sugars"],
+    )
+
+    assert ranked[0].name == "Bran Basics"
+
+
+def test_rank_candidates_prefers_higher_protein():
+    low_protein = _make_cereal("Light Flakes", sugars=10.0, protein=2.0)
+    high_protein = _make_cereal("Protein Crunch", sugars=10.0, protein=15.0)
+
+    ranked = rank_candidates(
+        evidence=[low_protein, high_protein],
+        query="cereal with more protein",
+        nutrients=["protein"],
+    )
+
+    assert ranked[0].name == "Protein Crunch"
+
+
+def test_rank_candidates_no_direction_returns_original_order():
+    a = _make_cereal("Cereal A", sugars=10.0, protein=5.0)
+    b = _make_cereal("Cereal B", sugars=8.0, protein=6.0)
+
+    ranked = rank_candidates(
+        evidence=[a, b],
+        query="tell me about cereals",  # no less/more wording
+        nutrients=["sugars"],
+    )
+
+    assert [c.name for c in ranked] == ["Cereal A", "Cereal B"]
+
+
+def test_rank_candidates_missing_data_sinks_to_bottom():
+    has_data = _make_cereal("Has Data", sugars=8.0, protein=5.0)
+    missing_data = EvidenceObject(
+        product_id="missing-data",
+        name="Missing Data",
+        brand="TestBrand",
+        nutrition={},  # no sugars field at all
+        completeness=0.5,
+        source="open_food_facts",
+    )
+
+    ranked = rank_candidates(
+        evidence=[missing_data, has_data],
+        query="cereal with less sugar",
+        nutrients=["sugars"],
+    )
+
+    assert ranked[0].name == "Has Data"

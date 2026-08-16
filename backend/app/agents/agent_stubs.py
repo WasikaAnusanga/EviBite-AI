@@ -7,7 +7,7 @@ leaving clear integration entry points for Members 2, 3, and 4.
 
 from typing import Any
 from pydantic import BaseModel, Field
-
+from backend.app.models.triage import Constraint
 
 # ==========================================
 # AGENT 2 CONTRACT STUB (Member 2 - Retrieval)
@@ -84,8 +84,10 @@ class ResponseRequest(BaseModel):
     triage_status: str
     evidence: list[EvidenceObject] = Field(default_factory=list)
     analysis: AnalysisResponse | None = None
-
-
+    constraints: list[Constraint] = Field(default_factory=list)
+    preferences: dict[str, bool] = Field(default_factory=dict)
+    nutrients: list[str] = Field(default_factory=list)
+    
 class ResponseResponse(BaseModel):
     trace_id: str
     answer: str

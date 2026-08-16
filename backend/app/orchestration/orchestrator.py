@@ -16,7 +16,7 @@ from backend.app.agents.retrieval.service import retrieval_service
 from backend.app.agents.triage.service import triage_message
 from backend.app.models.messages import ChatRequest, ChatResponse, ExecutionStep
 from backend.app.models.triage import RouteAgent, TriageRequest, TriageStatus
-
+from backend.app.agents.recommendation_response.service import response_service
 
 def run_orchestration(request: ChatRequest) -> ChatResponse:
     user_query = request.message.strip()
@@ -133,8 +133,11 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         triage_status=triage_output.triage_status.value,
         evidence=retrieval_res.candidates,
         analysis=analysis_res,
+        constraints=triage_output.constraints,
+        preferences=triage_output.preferences,
+        nutrients=triage_output.nutrients,
     )
-    response_res = stub_response_service(response_req)
+    response_res = response_service(response_req)
     execution_steps.append(
         ExecutionStep(
             agent="response",
