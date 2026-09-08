@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.app.agents.agent_stubs import AnalysisRequest, AnalysisResponse, EvidenceObject
 from backend.app.agents.nutrition_allergen.allergen_rules import check_allergen_conflict
-from backend.app.agents.nutrition_allergen.nutrient_rules import check_nutrient_constraint
+from backend.app.agents.nutrition_allergen.nutrient_rules import check_nutrient_constraint, infer_comparator
 from backend.app.agents.nutrition_allergen.dietary_rules import check_dietary_suitability
 
 VERDICT_PRIORITY = {
@@ -40,7 +40,8 @@ def analysis_service(request: AnalysisRequest) -> AnalysisResponse:
                 uncertainty_reasons.append(f"[{ev.name}] {result['explanation']}")
 
         for nutrient in request.nutrients:
-            result = check_nutrient_constraint(ev_dict, nutrient, "low")
+            comparator = infer_comparator(request.original_query, nutrient)
+            result = check_nutrient_constraint(ev_dict, nutrient, comparator)
             findings.append(f"[{ev.name}] {result['explanation']}")
             if result["status"] == "INSUFFICIENT_EVIDENCE":
                 uncertainty_reasons.append(f"[{ev.name}] {result['explanation']}")

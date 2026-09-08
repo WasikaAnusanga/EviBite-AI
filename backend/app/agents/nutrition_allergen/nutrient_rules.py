@@ -113,3 +113,21 @@ def compare_products_by_nutrient(
         "winner": best["name"],
         "explanation": f"'{best['name']}' has the {goal} {field} ({best['value']}) among compared products.",
     }
+
+LOW_DIRECTION_WORDS = {"low", "less", "fewer", "lower", "reduce", "minimal", "little"}
+HIGH_DIRECTION_WORDS = {"high", "more", "higher", "rich", "plenty", "lots"}
+
+
+def infer_comparator(query: str, nutrient: str, default: Literal["low", "high"] = "low") -> Literal["low", "high"]:
+    """
+    Look for direction words near the nutrient mention in the raw query.
+    Falls back to `default` if no direction word is found -- an honest
+    fallback, not a silent guess, since the caller controls what default
+    means and can log/flag when it's used.
+    """
+    text = query.lower()
+    if any(word in text for word in HIGH_DIRECTION_WORDS):
+        return "high"
+    if any(word in text for word in LOW_DIRECTION_WORDS):
+        return "low"
+    return default
