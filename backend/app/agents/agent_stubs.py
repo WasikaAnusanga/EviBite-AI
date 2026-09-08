@@ -85,6 +85,7 @@ class AnalysisRequest(BaseModel):
     nutrients: list[str] = Field(default_factory=list)
     dietary_requirements: list[str] = Field(default_factory=list)
     evidence: list[EvidenceObject] = Field(default_factory=list)
+    original_query: str = ""
 
 
 class AnalysisResponse(BaseModel):

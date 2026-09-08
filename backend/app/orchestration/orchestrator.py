@@ -114,6 +114,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             nutrients=triage_output.nutrients,
             dietary_requirements=triage_output.dietary_requirements,
             evidence=retrieval_res.candidates,
+            original_query=user_query, 
         )
         analysis_res = stub_analysis_service(analysis_req)
         execution_steps.append(
