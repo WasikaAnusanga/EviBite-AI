@@ -7,7 +7,7 @@ leaving clear integration entry points for Members 2, 3, and 4.
 
 from typing import Any
 from pydantic import BaseModel, Field
-
+from backend.app.models.triage import Constraint
 
 # ==========================================
 # AGENT 2 CONTRACT STUB (Member 2 - Retrieval)
@@ -41,38 +41,10 @@ class RetrievalResponse(BaseModel):
 
 
 def stub_retrieval_service(request: RetrievalRequest) -> RetrievalResponse:
-    """STUB FOR MEMBER 2: Product Information Retrieval Agent."""
-    candidates = []
-    for p in request.products:
-        name = p.get("name") or "Packaged Product"
-        candidates.append(
-            EvidenceObject(
-                product_id=f"off-{name.lower().replace(' ', '-')}",
-                name=name,
-                brand="Sample Brand",
-                barcode=p.get("barcode") or "1234567890",
-                categories=[request.category or "food"],
-                ingredients_text="Sugar, cocoa, hazelnut, milk solids, lecithin.",
-                allergens=["milk", "nuts", "hazelnut"],
-                nutrition={"sugars_g_100g": 56.3, "protein_g_100g": 6.3, "energy_kcal_100g": 539},
-                completeness=0.92,
-            )
-        )
-    if not candidates:
-        candidates.append(
-            EvidenceObject(
-                product_id="off-sample-item",
-                name="Sample Packaged Food",
-                brand="Generic Brand",
-                barcode="0000000000000",
-                categories=["packaged foods"],
-                ingredients_text="Wheat flour, sugar, vegetable oil, salt.",
-                allergens=["gluten"],
-                nutrition={"sugars_g_100g": 12.0, "protein_g_100g": 4.5},
-                completeness=0.85,
-            )
-        )
-    return RetrievalResponse(trace_id=request.trace_id, status="FOUND", candidates=candidates)
+    """Delegates to Member 2's Product Information Retrieval Agent service."""
+    from backend.app.agents.retrieval.service import retrieval_service
+    return retrieval_service(request)
+
 
 
 # ==========================================
@@ -113,8 +85,10 @@ class ResponseRequest(BaseModel):
     triage_status: str
     evidence: list[EvidenceObject] = Field(default_factory=list)
     analysis: AnalysisResponse | None = None
-
-
+    constraints: list[Constraint] = Field(default_factory=list)
+    preferences: dict[str, bool] = Field(default_factory=dict)
+    nutrients: list[str] = Field(default_factory=list)
+    
 class ResponseResponse(BaseModel):
     trace_id: str
     answer: str
