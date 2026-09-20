@@ -218,7 +218,10 @@ def _extract_comparison(text: str) -> Comparison:
 
 
 QUESTION_VERBS = {"does", "is", "can", "what", "how", "which", "tell", "show", "where", "why", "are", "do", "i", "have"}
-PRONOUNS_AND_GENERIC = {"it", "this", "that", "them", "anything", "something", "product", "food", "items", "item"}
+PRONOUNS_AND_GENERIC = {
+    "it", "this", "that", "them", "anything", "something", "product", "food",
+    "items", "item", "you", "me", "us", "we", "i", "how", "what", "why", "who", "help"
+}
 
 
 def _guess_product_names(message: str) -> list[ProductEntity]:
@@ -237,26 +240,24 @@ def _guess_product_names(message: str) -> list[ProductEntity]:
             products.append(ProductEntity(name=kp.title()))
 
     if not products:
-        words = message.strip().split()
-        first_word = words[0].lower() if words else ""
-        if first_word not in QUESTION_VERBS:
-            patterns = [
-                r"(?:about|is|does|in|of|for|eat)\s+([A-Z][A-Za-z0-9\-\s]+?)(?:\?|,|\.| contain| have| vegan| vegetarian| high| low| and|$)",
-                r"^([A-Z][A-Za-z0-9\-\s]+?)(?:\?|,|\.|$)",
-            ]
-            for pattern in patterns:
-                match = re.search(pattern, message.strip())
-                if match:
-                    value = match.group(1).strip()
-                    if (
-                        value
-                        and len(value) <= 60
-                        and value.lower() not in CATEGORY_TERMS
-                        and value.lower() not in PRONOUNS_AND_GENERIC
-                        and value.lower().split()[0] not in QUESTION_VERBS
-                    ):
-                        products.append(ProductEntity(name=value))
-                        break
+        patterns = [
+            r"(?:about|is|does|can|check|in|of|for|eat)\s+([A-Z][A-Za-z0-9\-\s]+?)(?:\?|,|\.| contain| have| vegan| vegetarian| high| low| and|$)",
+            r"^([A-Z][A-Za-z0-9\-\s]+?)(?:\?|,|\.|$)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, message.strip(), re.IGNORECASE)
+            if match:
+                value = match.group(1).strip()
+                if (
+                    value
+                    and len(value) <= 60
+                    and value.lower() not in CATEGORY_TERMS
+                    and value.lower() not in PRONOUNS_AND_GENERIC
+                    and value.lower().split()[0] not in PRONOUNS_AND_GENERIC
+                    and value.lower().split()[0] not in QUESTION_VERBS
+                ):
+                    products.append(ProductEntity(name=value))
+                    break
 
     return products
 
@@ -328,7 +329,7 @@ def _heuristic_triage(message: str) -> dict:
         primary_intent = Intent.ALLERGEN_CHECK
     elif has_nutrition_q:
         primary_intent = Intent.NUTRITION_QUERY
-    elif any(term in text for term in ["ingredient", "ingredients", "tell me about", "what is"]):
+    elif any(term in text for term in ["search", "lookup", "find", "ingredient", "ingredients", "tell me about", "what is", "about"]):
         primary_intent = Intent.PRODUCT_SEARCH
 
     requested_fields: list[str] = []

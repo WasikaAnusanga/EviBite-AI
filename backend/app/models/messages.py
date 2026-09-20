@@ -20,6 +20,7 @@ class AgentMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
     session_id: str | None = Field(default=None, max_length=100)
+    user_id: str | None = Field(default=None)
     previous_product: ProductEntity | None = Field(default=None)
 
 
@@ -27,6 +28,8 @@ class ExecutionStep(BaseModel):
     agent: str
     action: str
     status: str
+    duration_ms: int = 0
+    summary: str = ""
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
