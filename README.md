@@ -244,6 +244,24 @@ frontend/
 
 ---
 
+## 5. Commercialization Strategy & Pricing Model
+
+EviBite AI implements a **dual B2C SaaS subscription and B2B Enterprise API licensing model**. Full commercialization details are available in [docs/COMMERCIALIZATION_STRATEGY.md](file:///c:/Users/Wasika/Desktop/New%20folder/Evi-Bite-AI/EviBite-AI/docs/COMMERCIALIZATION_STRATEGY.md).
+
+### Pricing Overview
+
+| Stream | Tier Name | Price | Key Features |
+| :--- | :--- | :--- | :--- |
+| **B2C Consumer** | **Free Tier** | **$0 / month** | 10 daily product scans/queries, basic allergen warnings, Nutri-Score & Eco-Score display. |
+| **B2C Consumer** | **Shopper Premium** | **$4.99 / month** | Unlimited queries, Family Allergy Profiles (up to 5), custom nutrient goals, healthier recommendations. |
+| **B2B Retailer** | **API Starter** | **$299 / month** | Up to 50,000 API calls/month, REST API access for grocery web apps & e-commerce search. |
+| **B2B Retailer** | **Enterprise Retailer** | **$1,499 / month** | Up to 500,000 API calls/month, custom store DB adapter (live stock, price, aisle API), smart cart/kiosk SDK. |
+
+Live API Tier Endpoint: `GET /api/commercialization/tiers`
+
+---
+
+
 ## 4. Planned Repository Structure
 
 ```text
