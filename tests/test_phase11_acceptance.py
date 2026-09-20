@@ -204,18 +204,29 @@ def test_scenario_6_both_sources():
         headers=headers,
     )
 
-    res = client.post(
-        "/api/chat",
-        json={"message": "Does Nutella contain milk?"},
-        headers=headers,
+    off_ev = EvidenceObject(
+        evidence_id="off_nutella_3017620422003",
+        source_type="OPEN_FOOD_FACTS",
+        source_name="Open Food Facts",
+        product_name="Nutella Hazelnut Spread",
+        barcode="3017620422003",
+        ingredients_text="Sugar, Palm Oil, Hazelnuts (13%), Skimmed Milk Powder (8.7%), Cocoa, Soy Lecithin, Vanillin",
+        allergens=["milk", "hazelnut", "soy"],
     )
-    assert res.status_code == 200
-    data = res.json()
 
-    sources = data.get("sources", [])
-    source_types = [s.get("source_type") or s.get("type") for s in sources]
-    assert "OPEN_FOOD_FACTS" in source_types
-    assert "USER_DOCUMENT" in source_types
+    with mock.patch("backend.app.sources.open_food_facts.OpenFoodFactsSource.search", return_value=[off_ev]):
+        res = client.post(
+            "/api/chat",
+            json={"message": "Does Nutella contain milk?"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        sources = data.get("sources", [])
+        source_types = [s.get("source_type") or s.get("type") for s in sources]
+        assert "OPEN_FOOD_FACTS" in source_types
+        assert "USER_DOCUMENT" in source_types
 
 
 # =====================================================================
