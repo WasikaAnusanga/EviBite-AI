@@ -5,3 +5,8 @@ pytest
 google-genai
 httpx
 python-dotenv
+pymongo
+motor
+pyjwt
+bcrypt
+passlib

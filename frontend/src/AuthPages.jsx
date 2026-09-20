@@ -2,46 +2,61 @@ import React, { useState } from 'react';
 import {
   Leaf,
   ArrowRight,
-  CheckCircle2,
   Mail,
   Lock,
   User,
-  ShieldCheck,
-  Check,
   ArrowLeft,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
-
-const ALLERGY_CHIPS = [
-  { id: 'peanut', label: 'Peanuts' },
-  { id: 'milk', label: 'Dairy / Milk' },
-  { id: 'gluten', label: 'Gluten / Wheat' },
-  { id: 'soy', label: 'Soy' },
-  { id: 'nuts', label: 'Tree Nuts' },
-  { id: 'vegan', label: 'Vegan Preference' },
-];
 
 export function SignUpPage({ onNavigate, onAuthSuccess }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedAllergies, setSelectedAllergies] = useState(['peanut', 'milk']);
   const [agreeTerms, setAgreeTerms] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const toggleAllergy = (id) => {
-    setSelectedAllergies((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !fullName) return;
-    onAuthSuccess({
-      name: fullName,
-      email: email,
-      allergies: selectedAllergies,
-    });
+    setErrorMsg('');
+
+    if (!email || !fullName || !password) {
+      setErrorMsg('Please fill out all required fields.');
+      return;
+    }
+    if (!agreeTerms) {
+      setErrorMsg('Please agree to the Terms of Service.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName,
+          email: email.trim(),
+          password: password,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Registration failed.');
+      }
+
+      onAuthSuccess({
+        token: data.access_token,
+        user: data.user,
+      });
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,6 +84,14 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
             </div>
           </div>
 
+          {/* ERROR ALERT */}
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-700 font-medium">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* FULL NAME */}
             <div className="space-y-1">
@@ -80,7 +103,7 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Demo User"
+                  placeholder="Jane Doe"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
                 />
               </div>
@@ -96,7 +119,7 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="demo@evibite.ai"
+                  placeholder="jane@example.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
                 />
               </div>
@@ -118,37 +141,8 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
               </div>
             </div>
 
-            {/* ALLERGY PROFILE SELECTION */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                <span>Select Your Food Allergies & Diets</span>
-                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-              </label>
-
-              <div className="flex flex-wrap gap-2">
-                {ALLERGY_CHIPS.map((chip) => {
-                  const isSelected = selectedAllergies.includes(chip.id);
-                  return (
-                    <button
-                      type="button"
-                      key={chip.id}
-                      onClick={() => toggleAllergy(chip.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-emerald-100/90 border-emerald-300 text-[#1d5c31] font-bold'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      <span>{chip.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* TERMS CHECKBOX */}
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-1">
               <input
                 type="checkbox"
                 id="terms"
@@ -164,9 +158,10 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
             {/* SUBMIT BUTTON */}
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-[#1d5c31] hover:bg-[#154724] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 mt-2"
+              disabled={isSubmitting}
+              className="w-full py-3 rounded-xl bg-[#1d5c31] hover:bg-[#154724] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
             >
-              <span>Complete Registration</span>
+              <span>{isSubmitting ? 'Creating Account...' : 'Complete Registration'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -188,16 +183,76 @@ export function SignUpPage({ onNavigate, onAuthSuccess }) {
 }
 
 export function SignInPage({ onNavigate, onAuthSuccess }) {
-  const [email, setEmail] = useState('demo@evibite.ai');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onAuthSuccess({
-      name: 'Demo User',
-      email: email || 'demo@evibite.ai',
-      allergies: ['peanut', 'milk'],
-    });
+    setErrorMsg('');
+    if (!email || !password) {
+      setErrorMsg('Please enter both email and password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Sign in failed.');
+      }
+
+      onAuthSuccess({
+        token: data.access_token,
+        user: data.user,
+      });
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDemoSignIn = async () => {
+    // Quick Demo Sign In via backend
+    setErrorMsg('');
+    try {
+      // Create or sign in demo user
+      const demoEmail = 'demo@evibite.ai';
+      const demoPassword = 'demopassword123';
+
+      let res = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: demoEmail, password: demoPassword }),
+      });
+
+      if (!res.ok) {
+        // Create demo account if first time
+        res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_name: 'Demo User', email: demoEmail, password: demoPassword }),
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        onAuthSuccess({ token: data.access_token, user: data.user });
+      }
+    } catch (err) {
+      setErrorMsg('Demo sign in failed.');
+    }
   };
 
   return (
@@ -225,6 +280,14 @@ export function SignInPage({ onNavigate, onAuthSuccess }) {
             </div>
           </div>
 
+          {/* ERROR ALERT */}
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-700 font-medium">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* EMAIL */}
             <div className="space-y-1">
@@ -236,7 +299,7 @@ export function SignInPage({ onNavigate, onAuthSuccess }) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="demo@evibite.ai"
+                  placeholder="jane@example.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
                 />
               </div>
@@ -246,9 +309,6 @@ export function SignInPage({ onNavigate, onAuthSuccess }) {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700">Password</label>
-                <a href="#" className="text-[11px] text-[#1d5c31] font-semibold hover:underline">
-                  Forgot?
-                </a>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -266,22 +326,17 @@ export function SignInPage({ onNavigate, onAuthSuccess }) {
             {/* SUBMIT BUTTON */}
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-[#1d5c31] hover:bg-[#154724] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 mt-2"
+              disabled={isSubmitting}
+              className="w-full py-3 rounded-xl bg-[#1d5c31] hover:bg-[#154724] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
             >
-              <span>Sign In</span>
+              <span>{isSubmitting ? 'Signing In...' : 'Sign In'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           {/* DEMO QUICK LOGIN BUTTON */}
           <button
-            onClick={() =>
-              onAuthSuccess({
-                name: 'Demo User',
-                email: 'demo@evibite.ai',
-                allergies: ['peanut', 'milk'],
-              })
-            }
+            onClick={handleDemoSignIn}
             className="w-full py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#1d5c31] font-bold text-xs border border-emerald-200 transition flex items-center justify-center gap-2"
           >
             <Sparkles className="w-4 h-4 text-[#1d5c31]" />

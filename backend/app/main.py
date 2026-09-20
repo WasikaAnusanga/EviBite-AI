@@ -4,6 +4,9 @@ from fastapi.responses import JSONResponse
 from backend.app.api.routes.chat import router as chat_router
 from backend.app.api.routes.commercialization import router as commercialization_router
 from backend.app.api.routes.triage import router as triage_router
+from backend.app.api.routes.auth_routes import router as auth_router
+from backend.app.api.routes.history_routes import router as history_router
+from backend.app.db.database import init_db
 from backend.app.security.rate_limiter import rate_limiter
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +26,13 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def on_startup():
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning: DB init skipped or failed: {e}")
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -40,9 +50,10 @@ async def rate_limit_middleware(request: Request, call_next):
 app.include_router(triage_router)
 app.include_router(chat_router)
 app.include_router(commercialization_router)
-
+app.include_router(auth_router)
+app.include_router(history_router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok"}

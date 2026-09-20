@@ -47,28 +47,41 @@ const PRESET_BARCODES = [
 
 export default function App() {
   const [currentView, setCurrentView] = useState('landing');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('evibite_token') || null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('evibite_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: 'ai',
       text: "Hello! I'm EviBite AI, your multi-agent supermarket product intelligence assistant. How can I help you today?",
-      evidenceText: 'Ask me any question about food ingredients, allergen safety (peanuts, milk, soy, gluten), dietary preferences, or scan a product barcode!',
+      evidenceText: 'Ask me any question about food ingredients, allergen safety, dietary preferences, or scan a product barcode!',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
 
-
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [previousProduct, setPreviousProduct] = useState(null);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [userSessions, setUserSessions] = useState([]);
 
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [pricingData, setPricingData] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
+  const [serverStatus, setServerStatus] = useState('checking');
   const chatEndRef = useRef(null);
+
+  // Auto-redirect unauthenticated users trying to access 'app'
+  useEffect(() => {
+    if (currentView === 'app' && !authToken) {
+      setCurrentView('signup');
+    }
+  }, [currentView, authToken]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,11 +98,79 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const [serverStatus, setServerStatus] = useState('checking');
+  // Fetch user sessions when logged in
+  useEffect(() => {
+    if (authToken && (currentView === 'app' || activeTab === 'history')) {
+      fetchUserSessions();
+    }
+  }, [authToken, currentView, activeTab]);
+
+  const fetchUserSessions = async () => {
+    if (!authToken) return;
+    try {
+      const res = await fetch('/api/history', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserSessions(data.sessions || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user history', err);
+    }
+  };
+
+  const loadSessionMessages = async (sessionId) => {
+    if (!authToken || !sessionId) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/history/${sessionId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveSessionId(sessionId);
+        const formatted = data.messages.map((m, idx) => ({
+          id: m.id || idx,
+          sender: m.sender === 'user' ? 'user' : 'ai',
+          text: m.message,
+          triage_output: m.triage_output,
+          trace: m.triage_output ? { triage_output: m.triage_output, execution_path: ['triage', 'retrieval', 'safety', 'response'] } : null,
+          timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        }));
+        setMessages(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to load session messages', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAuthSuccess = ({ token, user }) => {
+    setAuthToken(token);
+    setCurrentUser(user);
+    localStorage.setItem('evibite_token', token);
+    localStorage.setItem('evibite_user', JSON.stringify(user));
+    setCurrentView('app');
+  };
+
+  const handleSignOut = () => {
+    setAuthToken(null);
+    setCurrentUser(null);
+    localStorage.removeItem('evibite_token');
+    localStorage.removeItem('evibite_user');
+    setCurrentView('landing');
+  };
 
   const handleSendMessage = async (queryText = inputQuery) => {
     const textToSend = queryText.trim();
     if (!textToSend || isLoading) return;
+
+    if (!authToken) {
+      setCurrentView('signup');
+      return;
+    }
 
     const userMsg = {
       id: Date.now(),
@@ -113,9 +194,13 @@ export default function App() {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({
           message: textToSend,
+          session_id: activeSessionId,
           previous_product: safePrevProduct,
         }),
       });
@@ -123,6 +208,9 @@ export default function App() {
       const data = await response.json();
 
       if (response.ok) {
+        if (data.session_id) {
+          setActiveSessionId(data.session_id);
+        }
         if (data.triage_output?.products && data.triage_output.products.length > 0) {
           const firstProduct = data.triage_output.products[0];
           if (firstProduct.name || firstProduct.barcode) {
@@ -138,7 +226,12 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
+        fetchUserSessions();
       } else {
+        if (response.status === 401) {
+          handleSignOut();
+          return;
+        }
         const errorMsg = {
           id: Date.now() + 1,
           sender: 'ai',
@@ -151,7 +244,7 @@ export default function App() {
       const offlineMsg = {
         id: Date.now() + 1,
         sender: 'ai',
-        text: 'Network Error: Could not connect to EviBite AI backend server at http://127.0.0.1:8000.',
+        text: 'Network Error: Could not connect to EviBite AI backend server.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, offlineMsg]);
@@ -161,9 +254,18 @@ export default function App() {
   };
 
   const clearChat = () => {
-    setMessages([]);
+    setActiveSessionId(null);
     setPreviousProduct(null);
+    setMessages([
+      {
+        id: Date.now(),
+        sender: 'ai',
+        text: "Started new conversation. How can I help you with food safety or ingredients today?",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
   };
+
 
   if (currentView === 'landing') {
     return <LandingPage onNavigate={(view) => setCurrentView(view)} />;
@@ -173,10 +275,7 @@ export default function App() {
     return (
       <SignUpPage
         onNavigate={(view) => setCurrentView(view)}
-        onAuthSuccess={(user) => {
-          setCurrentUser(user);
-          setCurrentView('app');
-        }}
+        onAuthSuccess={handleAuthSuccess}
       />
     );
   }
@@ -185,10 +284,7 @@ export default function App() {
     return (
       <SignInPage
         onNavigate={(view) => setCurrentView(view)}
-        onAuthSuccess={(user) => {
-          setCurrentUser(user);
-          setCurrentView('app');
-        }}
+        onAuthSuccess={handleAuthSuccess}
       />
     );
   }
@@ -198,7 +294,7 @@ export default function App() {
 
       {/* LEFT SIDEBAR NAVIGATION */}
       <aside className="w-64 bg-white border-r border-slate-200/80 p-5 flex flex-col justify-between shrink-0 shadow-sm">
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto">
           {/* LOGO */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-[#1d5c31]">
@@ -222,13 +318,12 @@ export default function App() {
           {/* NAV LINKS */}
           <nav className="space-y-1">
             {[
+              { id: 'chat', label: 'Chat Assistant', icon: MessageSquare },
               { id: 'history', label: 'History', icon: History },
               { id: 'explorer', label: 'Product Explorer', icon: UtensilsCrossed },
               { id: 'nutrition', label: 'Nutrition Analyzer', icon: Activity },
               { id: 'allergen', label: 'Allergen Checker', icon: ShieldAlert },
               { id: 'recommendations', label: 'Recommendations', icon: Sparkles },
-              { id: 'preferences', label: 'My Preferences', icon: Sliders },
-              { id: 'settings', label: 'Settings', icon: Settings },
             ].map((item) => {
               const IconComponent = item.icon;
               return (
@@ -247,6 +342,31 @@ export default function App() {
               );
             })}
           </nav>
+
+          {/* USER RECENT SESSIONS DRAWER */}
+          {userSessions.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block px-1">
+                Recent Conversations
+              </span>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {userSessions.map((session) => (
+                  <button
+                    key={session.session_id}
+                    onClick={() => loadSessionMessages(session.session_id)}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs truncate transition flex items-center gap-2 ${
+                      activeSessionId === session.session_id
+                        ? 'bg-emerald-50 text-[#1d5c31] font-bold border border-emerald-200'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{session.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* BOTTOM SIDEBAR CARDS */}
@@ -280,19 +400,19 @@ export default function App() {
           <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-[#1d5c31] text-white font-bold flex items-center justify-center text-xs">
-                {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : 'DU'}
+                {currentUser?.full_name || currentUser?.name ? (currentUser.full_name || currentUser.name).substring(0, 2).toUpperCase() : 'EU'}
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs font-bold text-slate-900 truncate">
-                  {currentUser?.name || 'Demo User'}
+                  {currentUser?.full_name || currentUser?.name || 'Logged User'}
                 </p>
                 <p className="text-[11px] text-slate-500 truncate">
-                  {currentUser?.email || 'demo@evibite.ai'}
+                  {currentUser?.email || 'user@example.com'}
                 </p>
               </div>
             </div>
             <button
-              onClick={() => setCurrentView('landing')}
+              onClick={handleSignOut}
               className="text-xs font-bold text-slate-500 hover:text-rose-600 transition px-1.5 py-1"
               title="Sign Out to Landing Page"
             >
@@ -301,6 +421,7 @@ export default function App() {
           </div>
         </div>
       </aside>
+
 
 
       {/* RIGHT MAIN CONTENT PANEL */}
