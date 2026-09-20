@@ -14,6 +14,9 @@ class RetrievalRequest(BaseModel):
     products: list[dict[str, Any]] = Field(default_factory=list)
     category: str | None = None
     requested_fields: list[str] = Field(default_factory=list)
+    user_id: str | None = None
+    comparison_targets: list[str] = Field(default_factory=list)
+    triage_context: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvidenceObject(BaseModel):
@@ -47,6 +50,7 @@ class EvidenceObject(BaseModel):
     completeness: float = 1.0
     combined_score: float = 0.0
 
+    conflicting_evidence: bool = False
     field_provenance: dict[str, Any] = Field(default_factory=dict)
     retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

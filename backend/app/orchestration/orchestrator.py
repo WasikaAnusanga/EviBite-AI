@@ -94,6 +94,9 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         products=[p.model_dump() for p in triage_output.products],
         category=triage_output.category,
         requested_fields=triage_output.requested_fields,
+        user_id=getattr(request, "user_id", None),
+        comparison_targets=triage_output.comparison_targets,
+        triage_context=triage_output.model_dump(),
     )
     retrieval_res = retrieval_service(retrieval_req)
     execution_steps.append(
