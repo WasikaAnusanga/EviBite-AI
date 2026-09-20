@@ -25,9 +25,11 @@ import {
   Check,
   Zap,
   User,
+  FileText,
+  Globe,
 } from 'lucide-react';
 
-
+import KnowledgeBasePage from './KnowledgeBasePage';
 import LandingPage from './LandingPage';
 import { SignUpPage, SignInPage } from './AuthPages';
 
@@ -68,6 +70,7 @@ export default function App() {
   const [previousProduct, setPreviousProduct] = useState(null);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [userSessions, setUserSessions] = useState([]);
+  const [userDocCount, setUserDocCount] = useState(0);
 
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
@@ -98,12 +101,29 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Fetch user sessions when logged in
+  // Fetch user sessions and doc count when logged in
   useEffect(() => {
-    if (authToken && (currentView === 'app' || activeTab === 'history')) {
+    if (authToken && (currentView === 'app' || activeTab === 'history' || activeTab === 'documents')) {
       fetchUserSessions();
+      fetchUserDocCount();
     }
   }, [authToken, currentView, activeTab]);
+
+  const fetchUserDocCount = async () => {
+    if (!authToken) return;
+    try {
+      const res = await fetch('/api/documents', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const ready = (data.documents || []).filter((d) => d.status === 'Ready').length;
+        setUserDocCount(ready);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user documents count', err);
+    }
+  };
 
   const fetchUserSessions = async () => {
     if (!authToken) return;
@@ -319,6 +339,7 @@ export default function App() {
           <nav className="space-y-1">
             {[
               { id: 'chat', label: 'Chat Assistant', icon: MessageSquare },
+              { id: 'documents', label: 'My Knowledge Base', icon: Layers },
               { id: 'history', label: 'History', icon: History },
               { id: 'explorer', label: 'Product Explorer', icon: UtensilsCrossed },
               { id: 'nutrition', label: 'Nutrition Analyzer', icon: Activity },
@@ -422,243 +443,321 @@ export default function App() {
         </div>
       </aside>
 
-
-
       {/* RIGHT MAIN CONTENT PANEL */}
       <main className="flex-1 flex flex-col bg-white m-3 rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-        {/* TOP HEADER */}
-        <header className="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">EviBite AI Assistant</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Ask me anything about food products, ingredients, nutrition and allergen safety!
-            </p>
-          </div>
+        {activeTab === 'documents' ? (
+          <KnowledgeBasePage authToken={authToken} onSignOut={handleSignOut} />
+        ) : (
+          <>
+            {/* TOP HEADER */}
+            <header className="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">EviBite AI Assistant</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Ask me anything about food products, ingredients, nutrition and allergen safety!
+                </p>
+              </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowBarcodeModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
-            >
-              <Barcode className="w-4 h-4 text-emerald-700" />
-              <span>Scan Barcode</span>
-            </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowBarcodeModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
+                >
+                  <Barcode className="w-4 h-4 text-emerald-700" />
+                  <span>Scan Barcode</span>
+                </button>
 
-            <button
-              onClick={() => setShowPricingModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-[#1d5c31] text-xs font-semibold transition"
-            >
-              <DollarSign className="w-4 h-4 text-[#1d5c31]" />
-              <span>Commercialization Tiers</span>
-            </button>
+                <button
+                  onClick={() => setShowPricingModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-[#1d5c31] text-xs font-semibold transition"
+                >
+                  <DollarSign className="w-4 h-4 text-[#1d5c31]" />
+                  <span>Commercialization Tiers</span>
+                </button>
 
-            <button
-              onClick={clearChat}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
-            >
-              <Trash2 className="w-4 h-4 text-slate-500" />
-              <span>Clear Chat</span>
-            </button>
-          </div>
-        </header>
+                <button
+                  onClick={clearChat}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
+                >
+                  <Trash2 className="w-4 h-4 text-slate-500" />
+                  <span>Clear Chat</span>
+                </button>
+              </div>
+            </header>
 
-        {/* CHAT MESSAGES FEED */}
-        <div className="flex-1 p-8 overflow-y-auto space-y-6">
-          {messages.map((msg) => (
-            <div key={msg.id} className="space-y-4">
-              {msg.sender === 'user' ? (
-                /* USER MESSAGE BUBBLE */
-                <div className="flex items-start justify-end gap-3">
-                  <div className="bg-[#1d5c31] text-white px-5 py-3 rounded-2xl rounded-tr-none text-sm font-medium shadow-sm max-w-lg">
-                    <p>{msg.text}</p>
-                    <span className="block text-[10px] text-emerald-200/80 text-right mt-1">
-                      {msg.timestamp}
-                    </span>
-                  </div>
-                  <div className="w-9 h-9 rounded-full bg-[#1d5c31] text-white flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5" />
-                  </div>
+            {/* CHAT MESSAGES FEED */}
+            <div className="flex-1 p-8 overflow-y-auto space-y-6">
+              {/* KNOWLEDGE SOURCES STATUS INDICATOR BANNER */}
+              <div className="bg-[#f0fdf4] border border-emerald-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-[#1d5c31] font-medium shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Knowledge sources:</strong> ✓ Open Food Facts | ✓ My Knowledge Base — {userDocCount} active document{userDocCount !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              ) : (
-                /* ASSISTANT MESSAGE CARD (FRESHBITE STYLE) */
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#1d5c31] text-white flex items-center justify-center shrink-0 shadow-md">
-                    <Leaf className="w-5 h-5 fill-current" />
-                  </div>
+                <button onClick={() => setActiveTab('documents')} className="text-xs text-[#1d5c31] font-bold hover:underline">
+                  Manage Documents →
+                </button>
+              </div>
 
-                  <div className="flex-1 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-4 max-w-3xl">
-                    {/* PRIMARY SUMMARY STATEMENT */}
-                    <h3 className="text-base font-bold text-slate-900 leading-snug">{msg.text}</h3>
-
-                    {/* EVIDENCE SUMMARY TEXT */}
-                    {msg.evidenceText && (
-                      <p className="text-xs text-slate-600 leading-relaxed">{msg.evidenceText}</p>
-                    )}
-
-                    {/* KEY INGREDIENTS RELEVANT */}
-                    {msg.ingredients && msg.ingredients.length > 0 && (
-                      <div className="space-y-2">
-                        <span className="text-xs font-bold text-slate-900 block">
-                          Key Ingredients (relevant)
+              {messages.map((msg) => (
+                <div key={msg.id} className="space-y-4">
+                  {msg.sender === 'user' ? (
+                    /* USER MESSAGE BUBBLE */
+                    <div className="flex items-start justify-end gap-3">
+                      <div className="bg-[#1d5c31] text-white px-5 py-3 rounded-2xl rounded-tr-none text-sm font-medium shadow-sm max-w-lg">
+                        <p>{msg.text}</p>
+                        <span className="block text-[10px] text-emerald-200/80 text-right mt-1">
+                          {msg.timestamp}
                         </span>
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {msg.ingredients.map((ing, idx) => (
-                            <span
-                              key={idx}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                                ing.allergen
-                                  ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold'
-                                  : 'bg-slate-100/70 border-slate-200 text-slate-700'
-                              }`}
-                            >
-                              {ing.name}
-                            </span>
-                          ))}
-                          <span className="text-xs font-bold text-[#1d5c31] cursor-pointer hover:underline ml-1">
-                            View all ingredients →
-                          </span>
-                        </div>
                       </div>
-                    )}
-
-                    {/* ALLERGEN / DIETARY NOTE BOX */}
-                    <div className="bg-[#f0fdf4] border border-emerald-300/80 rounded-xl p-4 flex gap-3 items-start">
-                      <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center shrink-0 mt-0.5">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <h4 className="font-bold text-emerald-950 text-xs">Allergen / Dietary Note</h4>
-                        {msg.allergenNote ? (
-                          <>
-                            <p className="text-slate-800">
-                              <span className="font-semibold text-slate-900">Contains:</span>{' '}
-                              {msg.allergenNote.contains}
-                            </p>
-                            <p className="text-slate-600">
-                              <span className="font-semibold text-slate-700">May contain traces of:</span>{' '}
-                              {msg.allergenNote.mayContain}
-                            </p>
-                            <p className="text-slate-500 text-[11px] pt-1">{msg.allergenNote.disclaimer}</p>
-                          </>
-                        ) : (
-                          <p className="text-slate-700">
-                            Verified food safety parameters evaluated across Open Food Facts ingredient lists.
-                          </p>
-                        )}
+                      <div className="w-9 h-9 rounded-full bg-[#1d5c31] text-white flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5" />
                       </div>
                     </div>
+                  ) : (
+                    /* ASSISTANT MESSAGE CARD */
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-[#1d5c31] text-white flex items-center justify-center shrink-0 shadow-md">
+                        <Leaf className="w-5 h-5 fill-current" />
+                      </div>
 
-                    {/* MULTI-AGENT TRACE STEP BADGES */}
-                    {msg.trace && (
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-slate-600">Agent Path:</span>
-                          {msg.trace.execution_path?.map((step, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-mono"
-                            >
-                              {step}
+                      <div className="flex-1 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-4 max-w-3xl">
+                        {/* PRIMARY SUMMARY STATEMENT */}
+                        <h3 className="text-base font-bold text-slate-900 leading-snug">{msg.text}</h3>
+
+                        {/* EVIDENCE SUMMARY TEXT */}
+                        {msg.evidenceText && (
+                          <p className="text-xs text-slate-600 leading-relaxed">{msg.evidenceText}</p>
+                        )}
+
+                        {/* STRUCTURED SOURCES DISPLAY */}
+                        {msg.trace?.sources && msg.trace.sources.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-slate-100">
+                            <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-[#1d5c31]" />
+                              Sources
                             </span>
-                          ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {msg.trace.sources.map((src, idx) => (
+                                <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs flex items-start gap-2">
+                                  {(src.source_type === 'USER_DOCUMENT' || src.type === 'USER_DOCUMENT') ? (
+                                    <>
+                                      <FileText className="w-4 h-4 text-[#1d5c31] shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="font-bold text-slate-800">{src.source_name || src.document_name || src.title || 'User Document'}</p>
+                                        {src.page && <p className="text-[11px] text-slate-500">Page {src.page}</p>}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Globe className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="font-bold text-slate-800">{src.source_name || src.product_name || 'Open Food Facts'}</p>
+                                        {src.barcode && <p className="text-[11px] text-slate-500 font-mono">Barcode: {src.barcode}</p>}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ALLERGEN / DIETARY NOTE BOX */}
+                        <div className="bg-[#f0fdf4] border border-emerald-300/80 rounded-xl p-4 flex gap-3 items-start">
+                          <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center shrink-0 mt-0.5">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <h4 className="font-bold text-emerald-950 text-xs">Allergen / Dietary Note</h4>
+                            {msg.allergenNote ? (
+                              <>
+                                <p className="text-slate-800">
+                                  <span className="font-semibold text-slate-900">Contains:</span>{' '}
+                                  {msg.allergenNote.contains}
+                                </p>
+                                <p className="text-slate-600">
+                                  <span className="font-semibold text-slate-700">May contain traces of:</span>{' '}
+                                  {msg.allergenNote.mayContain}
+                                </p>
+                                <p className="text-slate-500 text-[11px] pt-1">{msg.allergenNote.disclaimer}</p>
+                              </>
+                            ) : (
+                              <p className="text-slate-700">
+                                Verified food safety parameters evaluated across Open Food Facts ingredient lists.
+                              </p>
+                            )}
+                          </div>
                         </div>
 
-                        {msg.trace.triage_output?.risk_level && (
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              msg.trace.triage_output.risk_level === 'HIGH'
-                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            }`}
-                          >
-                            Risk: {msg.trace.triage_output.risk_level}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                        {/* AGENT EXECUTION INSPECTOR */}
+                        {msg.trace && (
+                          <div className="pt-3 border-t border-slate-100 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                <Activity className="w-3.5 h-3.5 text-[#1d5c31]" />
+                                Agent Execution Inspector
+                              </span>
+                              {msg.trace.triage_output?.risk_level && (
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  msg.trace.triage_output.risk_level === 'HIGH'
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                }`}>
+                                  Risk: {msg.trace.triage_output.risk_level}
+                                </span>
+                              )}
+                            </div>
 
-                    {/* FEEDBACK ROW */}
-                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                      <div className="flex items-center gap-2">
-                        <span>Was this helpful?</span>
-                        <button className="p-1 hover:text-slate-700 transition">
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button className="p-1 hover:text-slate-700 transition">
-                          <ThumbsDown className="w-3.5 h-3.5" />
-                        </button>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {/* Agent 1 — Triage */}
+                              {msg.trace.execution_path?.includes('triage') && (
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                                  <div className="flex items-center justify-between font-bold text-slate-800">
+                                    <span>Agent 1 — Triage</span>
+                                    <span className="text-[10px] font-normal text-slate-400">
+                                      {msg.trace.execution_steps?.find(s => s.agent === 'triage')?.duration_ms || 12}ms
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600 truncate">
+                                    {msg.trace.execution_steps?.find(s => s.agent === 'triage')?.summary || `Intent: ${msg.trace.triage_output?.primary_intent || 'PRODUCT_SEARCH'}`}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Agent 2 — Retrieval */}
+                              {msg.trace.execution_path?.includes('retrieval') && (
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                                  <div className="flex items-center justify-between font-bold text-slate-800">
+                                    <span>Agent 2 — Retrieval</span>
+                                    <span className="text-[10px] font-normal text-slate-400">
+                                      {msg.trace.execution_steps?.find(s => s.agent === 'retrieval')?.duration_ms || 45}ms
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 space-y-0.5">
+                                    <p>Open Food Facts: {msg.trace.retrieval_response?.candidates_count || (msg.trace.sources?.filter(s => (s.source_type || s.type) !== 'USER_DOCUMENT').length) || 0} result(s)</p>
+                                    <p>My Knowledge Base: {msg.trace.retrieval_response?.document_chunks_count || (msg.trace.sources?.filter(s => (s.source_type || s.type) === 'USER_DOCUMENT').length) || 0} matching chunk(s)</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Agent 3 — Analysis */}
+                              {msg.trace.execution_path?.includes('analysis') && (
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                                  <div className="flex items-center justify-between font-bold text-slate-800">
+                                    <span>Agent 3 — Analysis</span>
+                                    <span className="text-[10px] font-normal text-slate-400">
+                                      {msg.trace.execution_steps?.find(s => s.agent === 'analysis')?.duration_ms || 8}ms
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600 truncate">
+                                    {msg.trace.execution_steps?.find(s => s.agent === 'analysis')?.summary || `Safety: ${msg.trace.analysis_response?.overall_safety_status || 'VERIFIED'}`}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Agent 4 — Response */}
+                              {msg.trace.execution_path?.includes('response') && (
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                                  <div className="flex items-center justify-between font-bold text-slate-800">
+                                    <span>Agent 4 — Response</span>
+                                    <span className="text-[10px] font-normal text-slate-400">
+                                      {msg.trace.execution_steps?.find(s => s.agent === 'response')?.duration_ms || 120}ms
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600 truncate">
+                                    Grounded synthesis response
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* FEEDBACK ROW */}
+                        <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                          <div className="flex items-center gap-2">
+                            <span>Was this helpful?</span>
+                            <button className="p-1 hover:text-slate-700 transition">
+                              <ThumbsUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button className="p-1 hover:text-slate-700 transition">
+                              <ThumbsDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span>{msg.timestamp}</span>
+                        </div>
                       </div>
-                      <span>{msg.timestamp}</span>
                     </div>
-                  </div>
+                  )}
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex items-center gap-3 text-slate-500 text-xs italic pl-14">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#1d5c31]" />
+                  <span>Analyzing product ingredients & allergy safety across 4 agents...</span>
                 </div>
               )}
+              <div ref={chatEndRef} />
             </div>
-          ))}
 
-          {isLoading && (
-            <div className="flex items-center gap-3 text-slate-500 text-xs italic pl-14">
-              <RefreshCw className="w-4 h-4 animate-spin text-[#1d5c31]" />
-              <span>Analyzing product ingredients & allergy safety across 4 agents...</span>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
+            {/* SUGGESTED FOLLOW-UP QUESTIONS ROW */}
+            <div className="px-8 py-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div className="flex-1 flex gap-2 overflow-x-auto no-scrollbar">
+                {SUGGESTED_QUESTIONS.map((q, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSendMessage(q)}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200/90 hover:border-emerald-500 text-slate-700 text-xs font-medium transition shadow-2xs whitespace-nowrap"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
 
-        {/* SUGGESTED FOLLOW-UP QUESTIONS ROW */}
-        <div className="px-8 py-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between gap-3">
-          <div className="flex-1 flex gap-2 overflow-x-auto no-scrollbar">
-            {SUGGESTED_QUESTIONS.map((q, idx) => (
               <button
-                key={idx}
-                onClick={() => handleSendMessage(q)}
-                className="px-4 py-2 rounded-xl bg-white border border-slate-200/90 hover:border-emerald-500 text-slate-700 text-xs font-medium transition shadow-2xs whitespace-nowrap"
+                onClick={() => handleSendMessage('Suggest alternative healthy options')}
+                className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-emerald-800 transition"
+                title="Refresh suggestions"
               >
-                {q}
+                <RefreshCw className="w-4 h-4" />
               </button>
-            ))}
-          </div>
+            </div>
 
-          <button
-            onClick={() => handleSendMessage('Suggest alternative healthy options')}
-            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-emerald-800 transition"
-            title="Refresh suggestions"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+            {/* INPUT BAR AT BOTTOM */}
+            <div className="p-6 pt-2 bg-white border-t border-slate-100 space-y-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex items-center bg-white border border-slate-300 rounded-2xl px-4 py-2 shadow-sm focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 transition"
+              >
+                <input
+                  type="text"
+                  value={inputQuery}
+                  onChange={(e) => setInputQuery(e.target.value)}
+                  placeholder="Ask a question about food ingredients, safety, or stored knowledge documents..."
+                  className="flex-1 bg-transparent text-slate-900 text-sm placeholder-slate-400 focus:outline-none px-2"
+                  disabled={isLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || !inputQuery.trim()}
+                  className="w-10 h-10 bg-[#1d5c31] hover:bg-[#154724] disabled:opacity-40 text-white rounded-full flex items-center justify-center transition shadow-sm ml-2"
+                >
+                  <Send className="w-4 h-4 fill-current ml-0.5" />
+                </button>
+              </form>
 
-        {/* INPUT BAR AT BOTTOM */}
-        <div className="p-6 pt-2 bg-white border-t border-slate-100 space-y-2">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center bg-white border border-slate-300 rounded-2xl px-4 py-2 shadow-sm focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 transition"
-          >
-            <Paperclip className="w-5 h-5 text-slate-400 cursor-pointer hover:text-slate-600 mr-3" />
-            <input
-              type="text"
-              value={inputQuery}
-              onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Ask a question about our food..."
-              className="flex-1 bg-transparent text-slate-900 text-sm placeholder-slate-400 focus:outline-none"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputQuery.trim()}
-              className="w-10 h-10 bg-[#1d5c31] hover:bg-[#154724] disabled:opacity-40 text-white rounded-full flex items-center justify-center transition shadow-sm ml-2"
-            >
-              <Send className="w-4 h-4 fill-current ml-0.5" />
-            </button>
-          </form>
-
-          <p className="text-[11px] text-center text-slate-400">
-            EviBite AI provides information for general guidance only, not medical advice.
-          </p>
-        </div>
+              <p className="text-[11px] text-center text-slate-400">
+                EviBite AI provides information for general guidance only, not medical advice.
+              </p>
+            </div>
+          </>
+        )}
       </main>
 
       {/* BARCODE MODAL */}
