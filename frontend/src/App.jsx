@@ -28,6 +28,9 @@ import {
 } from 'lucide-react';
 
 
+import LandingPage from './LandingPage';
+import { SignUpPage, SignInPage } from './AuthPages';
+
 const API_BASE_URL = '';
 
 const SUGGESTED_QUESTIONS = [
@@ -43,6 +46,9 @@ const PRESET_BARCODES = [
 ];
 
 export default function App() {
+  const [currentView, setCurrentView] = useState('landing');
+  const [currentUser, setCurrentUser] = useState(null);
+
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -52,6 +58,7 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
+
 
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -158,8 +165,37 @@ export default function App() {
     setPreviousProduct(null);
   };
 
+  if (currentView === 'landing') {
+    return <LandingPage onNavigate={(view) => setCurrentView(view)} />;
+  }
+
+  if (currentView === 'signup') {
+    return (
+      <SignUpPage
+        onNavigate={(view) => setCurrentView(view)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          setCurrentView('app');
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'signin') {
+    return (
+      <SignInPage
+        onNavigate={(view) => setCurrentView(view)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          setCurrentView('app');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f6f5] flex font-sans text-slate-800">
+
       {/* LEFT SIDEBAR NAVIGATION */}
       <aside className="w-64 bg-white border-r border-slate-200/80 p-5 flex flex-col justify-between shrink-0 shadow-sm">
         <div className="space-y-6">
@@ -241,20 +277,31 @@ export default function App() {
           </div>
 
           {/* USER PROFILE */}
-          <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+          <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-emerald-800 text-white font-bold flex items-center justify-center text-xs">
-                DU
+              <div className="w-8 h-8 rounded-full bg-[#1d5c31] text-white font-bold flex items-center justify-center text-xs">
+                {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : 'DU'}
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900">Demo User</p>
-                <p className="text-[11px] text-slate-500">demo@evibite.ai</p>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {currentUser?.name || 'Demo User'}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {currentUser?.email || 'demo@evibite.ai'}
+                </p>
               </div>
             </div>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <button
+              onClick={() => setCurrentView('landing')}
+              className="text-xs font-bold text-slate-500 hover:text-rose-600 transition px-1.5 py-1"
+              title="Sign Out to Landing Page"
+            >
+              Exit
+            </button>
           </div>
         </div>
       </aside>
+
 
       {/* RIGHT MAIN CONTENT PANEL */}
       <main className="flex-1 flex flex-col bg-white m-3 rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
