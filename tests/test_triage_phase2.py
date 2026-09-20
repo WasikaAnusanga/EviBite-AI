@@ -88,11 +88,12 @@ def test_prompt_injection_handling():
     assert out.triage_status == TriageStatus.UNSUPPORTED or len(out.unsupported_requirements) > 0
 
 def test_malformed_gemini_json():
-    with patch("backend.app.agents.triage.llm_extractor.genai") as mock_genai:
-        mock_client = mock_genai.Client.return_value
-        mock_client.models.generate_content.return_value.text = "invalid json { { "
-        res = extract_with_llm("How much sugar in Nutella?")
-        assert res is None  # Should gracefully fail to fallback
+    with patch.dict("os.environ", {"GEMINI_API_KEY": "fake_key"}):
+        with patch("google.genai.Client") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
+            mock_client.models.generate_content.return_value.text = "invalid json { { "
+            res = extract_with_llm("How much sugar in Nutella?")
+            assert res is None
 
 def test_gemini_unavailable():
     with patch.dict("os.environ", {}, clear=True):

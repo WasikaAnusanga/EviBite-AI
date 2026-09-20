@@ -33,11 +33,11 @@ ALLERGEN_TERMS = {
 }
 
 NUTRIENT_TERMS = {
-    "sugars": ["sugar", "sugars"],
-    "protein": ["protein"],
+    "sugar": ["sugar", "sugars"],
+    "protein": ["protein", "proteins"],
     "fat": ["fat", "fats"],
     "sodium": ["sodium", "salt"],
-    "energy": ["calorie", "calories", "kcal", "energy"],
+    "calories": ["calorie", "calories", "kcal", "energy"],
 }
 
 DIETARY_TERMS = ["vegan", "vegetarian", "dairy-free", "gluten-free"]
@@ -65,6 +65,8 @@ def _extract_nutrients(text: str) -> list[str]:
     for canonical, terms in NUTRIENT_TERMS.items():
         if _contains_any(text, terms):
             found.append(canonical)
+            if canonical == "sugar" and "sugars" not in found:
+                found.append("sugars")
     return found
 
 
@@ -222,11 +224,16 @@ PRONOUNS_AND_GENERIC = {"it", "this", "that", "them", "anything", "something", "
 def _guess_product_names(message: str) -> list[ProductEntity]:
     """Extract candidate product names from free text."""
     products: list[ProductEntity] = []
+    seen_names = set()
     
-    known_products = ["nutella", "coca-cola zero", "coca-cola", "pepsi", "oreo", "kitkat", "snickers"]
+    known_products = [
+        "coca-cola zero", "coke zero", "coca-cola", "coke", "pepsi", "nutella",
+        "oreo", "cheerios", "special k", "kitkat", "snickers"
+    ]
     text_lower = message.lower()
     for kp in known_products:
-        if kp in text_lower:
+        if kp in text_lower and kp not in seen_names:
+            seen_names.add(kp)
             products.append(ProductEntity(name=kp.title()))
 
     if not products:
@@ -265,19 +272,23 @@ def _heuristic_triage(message: str) -> dict:
     constraints = _extract_constraints(text)
     comparison = _extract_comparison(text)
 
+    has_dietary = bool(dietary) or any(phrase in text for phrase in ["vegan", "vegetarian", "dairy-free", "gluten-free"])
     has_allergen_q = bool(allergens) or any(
-        phrase in text for phrase in ["allergic", "allergy", "contain", "contains", "does it have", "can i eat"]
+        phrase in text for phrase in ["allergic", "allergy", "hazelnut", "hazelnuts", "peanut", "peanuts", "milk", "gluten"]
     )
+    if not has_allergen_q and not has_dietary and any(phrase in text for phrase in ["contain", "contains", "does it have", "can i eat"]):
+        has_allergen_q = True
+
     has_nutrition_q = bool(nutrients) or any(
         phrase in text for phrase in ["how much sugar", "calories", "protein", "nutrition", "fat"]
     )
     has_comparison = any(
-        phrase in text for phrase in ["compare", "which has", "which one", "less sugar", "more protein"]
+        phrase in text for phrase in ["compare", "which has", "which one", "versus", " vs ", "less sugar", "more protein"]
     )
     has_recommendation = any(
-        phrase in text for phrase in ["recommend", "suggest", "show me", "find me", "good options", "alternative"]
+        phrase in text for phrase in ["recommend", "suggest", "show me", "find me", "good options", "alternative", "i want"]
     )
-    has_dietary = bool(dietary)
+
     greeting_terms = ["hi", "hello", "hey", "good morning", "good afternoon", "greetings", "thanks", "thank you", "who are you", "what can you do", "help", "who made you"]
     clean_text = re.sub(r"[^\w\s]", "", text)
     is_greeting = any(
@@ -292,12 +303,18 @@ def _heuristic_triage(message: str) -> dict:
     # Multi-intent parsing
     if is_greeting:
         primary_intent = Intent.GREETING
+    elif has_comparison:
+        primary_intent = Intent.PRODUCT_COMPARISON if len(products) >= 2 else Intent.NUTRIENT_COMPARISON
+    elif has_dietary:
+        primary_intent = Intent.DIETARY_COMPLIANCE
+    elif has_recommendation or (category and (constraints or "high" in text or "low" in text or "under" in text or "over" in text)):
+        primary_intent = Intent.RECOMMENDATION
     elif has_allergen_q and has_nutrition_q:
-        primary_intent = Intent.ALLERGEN_QUERY
+        primary_intent = Intent.ALLERGEN_CHECK
         secondary_intents = [Intent.NUTRITION_QUERY]
         subtasks = [
             {
-                "intent": "allergen_query",
+                "intent": "allergen_check",
                 "query_fragment": "allergen safety check",
                 "target_fields": ["allergens", "ingredients"],
             },
@@ -308,13 +325,7 @@ def _heuristic_triage(message: str) -> dict:
             },
         ]
     elif has_allergen_q:
-        primary_intent = Intent.ALLERGEN_QUERY
-    elif has_dietary:
-        primary_intent = Intent.DIETARY_QUERY
-    elif has_comparison:
-        primary_intent = Intent.COMPARISON
-    elif has_recommendation:
-        primary_intent = Intent.RECOMMENDATION
+        primary_intent = Intent.ALLERGEN_CHECK
     elif has_nutrition_q:
         primary_intent = Intent.NUTRITION_QUERY
     elif any(term in text for term in ["ingredient", "ingredients", "tell me about", "what is"]):
@@ -466,14 +477,17 @@ def triage_message(request: TriageRequest) -> TriageOutput:
             used_previous_product = True
 
     # 4. Deterministic Python Safety & Risk Assessment
-    if allergens or primary_intent == Intent.ALLERGEN_QUERY or Intent.ALLERGEN_QUERY in secondary_intents:
+    if allergens or primary_intent in {Intent.ALLERGEN_CHECK, Intent.ALLERGEN_QUERY} or Intent.ALLERGEN_CHECK in secondary_intents:
         risk_level = RiskLevel.HIGH
     elif primary_intent in {
         Intent.NUTRITION_QUERY,
+        Intent.PRODUCT_COMPARISON,
+        Intent.NUTRIENT_COMPARISON,
         Intent.COMPARISON,
+        Intent.DIETARY_COMPLIANCE,
         Intent.DIETARY_QUERY,
         Intent.RECOMMENDATION,
-    } or any(i in {Intent.NUTRITION_QUERY, Intent.COMPARISON, Intent.DIETARY_QUERY} for i in secondary_intents):
+    } or any(i in {Intent.NUTRITION_QUERY, Intent.PRODUCT_COMPARISON, Intent.NUTRIENT_COMPARISON, Intent.DIETARY_COMPLIANCE} for i in secondary_intents):
         risk_level = RiskLevel.MEDIUM
     else:
         risk_level = RiskLevel.LOW
@@ -481,8 +495,10 @@ def triage_message(request: TriageRequest) -> TriageOutput:
     # 5. Check Clarification Need & Out-of-Domain Status
     needs_product = primary_intent in {
         Intent.PRODUCT_SEARCH,
+        Intent.ALLERGEN_CHECK,
         Intent.ALLERGEN_QUERY,
         Intent.NUTRITION_QUERY,
+        Intent.DIETARY_COMPLIANCE,
         Intent.DIETARY_QUERY,
     }
 
@@ -490,14 +506,14 @@ def triage_message(request: TriageRequest) -> TriageOutput:
     if needs_product and not has_valid_product:
         missing_fields.append("product")
 
-    # If pure store query with no food query elements, treat as unsupported
+    # If pure store query with no food query elements, treat as unsupported/out_of_domain
     is_pure_store_query = bool(unsupported_requirements) and not (
         allergens or nutrients or dietary_requirements or has_valid_product or primary_intent in {
-            Intent.ALLERGEN_QUERY, Intent.NUTRITION_QUERY, Intent.DIETARY_QUERY, Intent.PRODUCT_SEARCH
+            Intent.ALLERGEN_CHECK, Intent.ALLERGEN_QUERY, Intent.NUTRITION_QUERY, Intent.DIETARY_COMPLIANCE, Intent.DIETARY_QUERY, Intent.PRODUCT_SEARCH
         }
     )
 
-    if is_pure_store_query or primary_intent == Intent.UNKNOWN:
+    if is_pure_store_query or primary_intent in {Intent.UNKNOWN, Intent.OUT_OF_DOMAIN}:
         status = TriageStatus.UNSUPPORTED
         clarification = Clarification()
         routing = RoutingDecision(
@@ -507,10 +523,11 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         )
     elif missing_fields:
         status = TriageStatus.CLARIFICATION_REQUIRED
+        q_target = f"for {allergens[0]}" if allergens else ""
         clarification = Clarification(
             required=True,
             missing_fields=missing_fields,
-            question="Which product would you like me to check?",
+            question=f"Which product would you like me to check{(' ' + q_target) if q_target else ''}?",
         )
         routing = RoutingDecision(
             next_agent=None,

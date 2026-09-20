@@ -65,35 +65,37 @@ Your task is to analyze user queries about packaged food products and extract st
 CRITICAL INTENT STRINGS (YOU MUST USE ONLY THESE EXACT STRINGS FOR primary_intent AND secondary_intents):
 - "product_search"
 - "barcode_lookup"
-- "allergen_query"
+- "allergen_check"
+- "dietary_compliance"
 - "nutrition_query"
-- "comparison"
-- "dietary_query"
+- "nutrient_comparison"
+- "product_comparison"
 - "recommendation"
 - "greeting"
+- "out_of_domain"
 - "unknown"
 
 Rules:
-1. Multi-intent queries: If the user asks about an allergy AND nutrition (e.g. "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"), set primary_intent to "allergen_query" and secondary_intents to ["nutrition_query"].
+1. Multi-intent queries: If the user asks about an allergy AND nutrition (e.g. "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"), set primary_intent to "allergen_check" and secondary_intents to ["nutrition_query"].
 2. Greetings / Help / Thanks: If the user greets (e.g. "Hi", "Hello", "How are you"), asks what the system does ("Who are you?", "Help"), or thanks ("Thank you"), set primary_intent to "greeting".
 3. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
 4. Allergens: List canonical allergen names (e.g. ["peanut"]).
-5. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
+5. Nutrients: List canonical nutrient names (e.g. ["sugar"]).
 
 Expected JSON format:
 {
-  "primary_intent": "allergen_query",
+  "primary_intent": "allergen_check",
   "secondary_intents": ["nutrition_query"],
   "products": [{"name": "Nutella"}],
   "category": null,
   "allergens": ["peanut"],
   "dietary_requirements": [],
-  "nutrients": ["sugars"],
-  "requested_fields": ["allergens", "ingredients", "sugars"],
+  "nutrients": ["sugar"],
+  "requested_fields": ["allergens", "ingredients", "sugar"],
   "constraints": [],
   "subtasks": [
-    {"intent": "allergen_query", "query_fragment": "peanut allergy check", "target_fields": ["allergens"]},
-    {"intent": "nutrition_query", "query_fragment": "sugar content check", "target_fields": ["sugars"]}
+    {"intent": "allergen_check", "query_fragment": "peanut allergy check", "target_fields": ["allergens"]},
+    {"intent": "nutrition_query", "query_fragment": "sugar content check", "target_fields": ["sugar"]}
   ],
   "unsupported_requirements": []
 }
@@ -108,17 +110,20 @@ INTENT_MAP = {
     "hi": Intent.GREETING,
     "help": Intent.GREETING,
     "thanks": Intent.GREETING,
-    "allergy": Intent.ALLERGEN_QUERY,
-    "allergen": Intent.ALLERGEN_QUERY,
-    "check_allergy_safety": Intent.ALLERGEN_QUERY,
+    "allergy": Intent.ALLERGEN_CHECK,
+    "allergen": Intent.ALLERGEN_CHECK,
+    "check_allergy": Intent.ALLERGEN_CHECK,
+    "diet": Intent.DIETARY_COMPLIANCE,
+    "vegan": Intent.DIETARY_COMPLIANCE,
+    "vegetarian": Intent.DIETARY_COMPLIANCE,
     "nutrition": Intent.NUTRITION_QUERY,
     "search": Intent.PRODUCT_SEARCH,
     "product": Intent.PRODUCT_SEARCH,
-    "compare": Intent.COMPARISON,
-    "diet": Intent.DIETARY_QUERY,
+    "compare": Intent.PRODUCT_COMPARISON,
+    "nutrient_compare": Intent.NUTRIENT_COMPARISON,
     "recommend": Intent.RECOMMENDATION,
+    "out_of_domain": Intent.OUT_OF_DOMAIN,
 }
-
 
 
 def _normalize_intent(value: Any) -> Intent:

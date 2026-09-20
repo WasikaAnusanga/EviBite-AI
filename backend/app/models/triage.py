@@ -7,12 +7,18 @@ from pydantic import BaseModel, Field
 class Intent(str, Enum):
     PRODUCT_SEARCH = "product_search"
     BARCODE_LOOKUP = "barcode_lookup"
-    ALLERGEN_QUERY = "allergen_query"
+    ALLERGEN_CHECK = "allergen_check"
+    ALLERGEN_QUERY = "allergen_check"
+    DIETARY_COMPLIANCE = "dietary_compliance"
+    DIETARY_QUERY = "dietary_compliance"
     NUTRITION_QUERY = "nutrition_query"
-    COMPARISON = "comparison"
-    DIETARY_QUERY = "dietary_query"
+    NUTRIENT_COMPARISON = "nutrient_comparison"
+    PRODUCT_COMPARISON = "product_comparison"
+    COMPARISON = "product_comparison"
     RECOMMENDATION = "recommendation"
     GREETING = "greeting"
+    OUT_OF_DOMAIN = "out_of_domain"
+    UNSUPPORTED = "out_of_domain"
     UNKNOWN = "unknown"
 
 

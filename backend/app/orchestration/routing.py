@@ -14,10 +14,11 @@ def build_routing(intent: Intent) -> RoutingDecision:
         )
 
     if intent in {
-        Intent.ALLERGEN_QUERY,
+        Intent.ALLERGEN_CHECK,
+        Intent.DIETARY_COMPLIANCE,
         Intent.NUTRITION_QUERY,
-        Intent.COMPARISON,
-        Intent.DIETARY_QUERY,
+        Intent.PRODUCT_COMPARISON,
+        Intent.NUTRIENT_COMPARISON,
         Intent.RECOMMENDATION,
     }:
         return RoutingDecision(
