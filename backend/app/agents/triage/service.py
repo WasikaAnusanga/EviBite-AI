@@ -19,6 +19,8 @@ from backend.app.models.triage import (
 )
 from backend.app.orchestration.routing import build_routing
 
+from backend.app.security.guard import sanitize_user_query
+
 BARCODE_RE = re.compile(r"^\d{8,14}$")
 
 ALLERGEN_TERMS = {
@@ -77,6 +79,55 @@ def _extract_category(text: str) -> str | None:
     return None
 
 
+def _extract_constraints(text: str) -> list[Constraint]:
+    constraints: list[Constraint] = []
+    pattern = r"(less\s+than|under|below|<=|<|more\s+than|over|above|>=|>)\s*(\d+(?:\.\d+)?)\s*(g|mg|kcal|cal)?\s*(sugar|sugars|fat|fats|protein|sodium|calories|energy)?"
+    matches = re.finditer(pattern, text)
+    for m in matches:
+        op_str, val_str, unit, nutrient = m.groups()
+        val = float(val_str)
+        if op_str in ["less than", "under", "below", "<"]:
+            op = "<"
+        elif op_str == "<=":
+            op = "<="
+        elif op_str in ["more than", "over", "above", ">"]:
+            op = ">"
+        elif op_str == ">=":
+            op = ">="
+        else:
+            op = "<="
+
+        field = nutrient if nutrient else "sugars"
+        if field in ["sugar", "sugars"]:
+            field = "sugars"
+        elif field in ["fat", "fats"]:
+            field = "fat"
+        constraints.append(Constraint(field=field, operator=op, value=val, unit=unit or "g"))
+    return constraints
+
+
+def _extract_comparison(text: str) -> Comparison:
+    metric = None
+    goal = None
+    if "sugar" in text or "sugars" in text:
+        metric = "sugars"
+    elif "protein" in text:
+        metric = "protein"
+    elif "fat" in text or "fats" in text:
+        metric = "fat"
+    elif "calorie" in text or "calories" in text:
+        metric = "energy"
+
+    if any(w in text for w in ["less", "lower", "fewer", "least", "lowest", "reduce"]):
+        goal = "lower"
+    elif any(w in text for w in ["more", "higher", "highest", "most"]):
+        goal = "higher"
+    elif "equal" in text or "same" in text:
+        goal = "equal"
+
+    return Comparison(metric=metric, goal=goal)
+
+
 QUESTION_VERBS = {"does", "is", "can", "what", "how", "which", "tell", "show", "where", "why", "are", "do", "i", "have"}
 PRONOUNS_AND_GENERIC = {"it", "this", "that", "them", "anything", "something", "product", "food", "items", "item"}
 
@@ -85,7 +136,6 @@ def _guess_product_names(message: str) -> list[ProductEntity]:
     """Extract candidate product names from free text."""
     products: list[ProductEntity] = []
     
-    # Known common product names for quick heuristic matching
     known_products = ["nutella", "coca-cola zero", "coca-cola", "pepsi", "oreo", "kitkat", "snickers"]
     text_lower = message.lower()
     for kp in known_products:
@@ -125,6 +175,8 @@ def _heuristic_triage(message: str) -> dict:
     dietary = _extract_dietary(text)
     category = _extract_category(text)
     products = _guess_product_names(message)
+    constraints = _extract_constraints(text)
+    comparison = _extract_comparison(text)
 
     has_allergen_q = bool(allergens) or any(
         phrase in text for phrase in ["allergic", "allergy", "contain", "contains", "does it have", "can i eat"]
@@ -139,13 +191,21 @@ def _heuristic_triage(message: str) -> dict:
         phrase in text for phrase in ["recommend", "suggest", "show me", "find me", "good options", "alternative"]
     )
     has_dietary = bool(dietary)
+    greeting_terms = ["hi", "hello", "hey", "good morning", "good afternoon", "greetings", "thanks", "thank you", "who are you", "what can you do", "help", "who made you"]
+    clean_text = re.sub(r"[^\w\s]", "", text)
+    is_greeting = any(
+        clean_text == term or clean_text.startswith(term + " ") or clean_text.endswith(" " + term) or f" {term} " in clean_text
+        for term in greeting_terms
+    ) and not (has_allergen_q or has_nutrition_q or has_comparison or has_recommendation or has_dietary or products)
 
     primary_intent = Intent.UNKNOWN
     secondary_intents: list[Intent] = []
     subtasks: list[dict] = []
 
     # Multi-intent parsing
-    if has_allergen_q and has_nutrition_q:
+    if is_greeting:
+        primary_intent = Intent.GREETING
+    elif has_allergen_q and has_nutrition_q:
         primary_intent = Intent.ALLERGEN_QUERY
         secondary_intents = [Intent.NUTRITION_QUERY]
         subtasks = [
@@ -193,19 +253,54 @@ def _heuristic_triage(message: str) -> dict:
         "nutrients": nutrients,
         "dietary_requirements": dietary,
         "requested_fields": list(dict.fromkeys(requested_fields)),
-        "constraints": [],
+        "constraints": constraints,
+        "comparison": comparison,
         "subtasks": subtasks,
         "unsupported_requirements": [],
     }
 
 
+
 def triage_message(request: TriageRequest) -> TriageOutput:
     message = request.message.strip()
     text = message.lower()
+
+    # 0. Prompt Injection & Security Guard Interceptor
+    is_safe, sanitized_or_reason = sanitize_user_query(message)
+    if not is_safe:
+        return TriageOutput(
+            trace_id=f"REQ-{uuid4().hex[:8].upper()}",
+            triage_status=TriageStatus.UNSUPPORTED,
+            input_type=InputType.NATURAL_LANGUAGE,
+            original_query=message,
+            primary_intent=Intent.UNKNOWN,
+            secondary_intents=[],
+            products=[],
+            category=None,
+            requested_fields=[],
+            allergens=[],
+            dietary_requirements=[],
+            nutrients=[],
+            constraints=[],
+            preferences={},
+            comparison=Comparison(),
+            subtasks=[],
+            context=ContextUsage(),
+            risk_level=RiskLevel.LOW,
+            unsupported_requirements=["prompt_injection_attempt"],
+            clarification=Clarification(),
+            routing=RoutingDecision(
+                next_agent=RouteAgent.RESPONSE,
+                required_agents=[RouteAgent.RESPONSE],
+                analysis_required=False,
+            ),
+        )
+
     barcode_only = bool(BARCODE_RE.fullmatch(message))
 
     # 1. Handle exact barcode lookup deterministically
     if barcode_only:
+
         product = ProductEntity(barcode=message)
         routing = build_routing(Intent.BARCODE_LOOKUP)
         return TriageOutput(
@@ -246,7 +341,9 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         constraints = llm_extracted.constraints
         subtasks = llm_extracted.subtasks
         unsupported_requirements = llm_extracted.unsupported_requirements
+        comparison = Comparison()
     else:
+
         # Fallback to upgraded heuristic extraction
         parsed = _heuristic_triage(message)
         primary_intent = parsed["primary_intent"]
@@ -258,10 +355,30 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         dietary_requirements = parsed["dietary_requirements"]
         requested_fields = parsed["requested_fields"]
         constraints = parsed["constraints"]
+        comparison = parsed.get("comparison", Comparison())
         subtasks = parsed["subtasks"]
         unsupported_requirements = parsed["unsupported_requirements"]
 
-    # 3. Deterministic Python Safety & Risk Assessment
+
+    # Detect store inventory / non-food out-of-domain terms
+    store_terms = ["price", "cost", "stock", "aisle", "shelf", "branch", "location", "discount", "where to buy"]
+    for st in store_terms:
+        if st in text and st not in unsupported_requirements:
+            unsupported_requirements.append(st)
+
+    # 3. Context & Pronoun Resolution ("it", "this", "that")
+    used_previous_product = False
+    has_valid_product = any(p.name or p.barcode for p in products)
+    pronouns = {"it", "this", "that", "them"}
+    has_pronoun = bool(set(text.split()).intersection(pronouns)) or "does it" in text or "is it" in text
+
+    if request.previous_product and (not has_valid_product or has_pronoun):
+        if request.previous_product.name or request.previous_product.barcode:
+            products = [request.previous_product]
+            has_valid_product = True
+            used_previous_product = True
+
+    # 4. Deterministic Python Safety & Risk Assessment
     if allergens or primary_intent == Intent.ALLERGEN_QUERY or Intent.ALLERGEN_QUERY in secondary_intents:
         risk_level = RiskLevel.HIGH
     elif primary_intent in {
@@ -274,20 +391,34 @@ def triage_message(request: TriageRequest) -> TriageOutput:
     else:
         risk_level = RiskLevel.LOW
 
-    # 4. Check Clarification Need
+    # 5. Check Clarification Need & Out-of-Domain Status
     needs_product = primary_intent in {
         Intent.PRODUCT_SEARCH,
         Intent.ALLERGEN_QUERY,
         Intent.NUTRITION_QUERY,
         Intent.DIETARY_QUERY,
     }
-    has_valid_product = any(p.name or p.barcode for p in products)
 
     missing_fields: list[str] = []
     if needs_product and not has_valid_product:
         missing_fields.append("product")
 
-    if missing_fields:
+    # If pure store query with no food query elements, treat as unsupported
+    is_pure_store_query = bool(unsupported_requirements) and not (
+        allergens or nutrients or dietary_requirements or has_valid_product or primary_intent in {
+            Intent.ALLERGEN_QUERY, Intent.NUTRITION_QUERY, Intent.DIETARY_QUERY, Intent.PRODUCT_SEARCH
+        }
+    )
+
+    if is_pure_store_query or primary_intent == Intent.UNKNOWN:
+        status = TriageStatus.UNSUPPORTED
+        clarification = Clarification()
+        routing = RoutingDecision(
+            next_agent=RouteAgent.RESPONSE,
+            required_agents=[RouteAgent.RESPONSE],
+            analysis_required=False,
+        )
+    elif missing_fields:
         status = TriageStatus.CLARIFICATION_REQUIRED
         clarification = Clarification(
             required=True,
@@ -299,16 +430,8 @@ def triage_message(request: TriageRequest) -> TriageOutput:
             required_agents=[],
             analysis_required=False,
         )
-    elif primary_intent == Intent.UNKNOWN:
-        status = TriageStatus.UNSUPPORTED
-        clarification = Clarification()
-        routing = RoutingDecision(
-            next_agent=RouteAgent.RESPONSE,
-            required_agents=[RouteAgent.RESPONSE],
-            analysis_required=False,
-        )
     else:
-        status = TriageStatus.READY
+        status = TriageStatus.READY if not unsupported_requirements else TriageStatus.PARTIALLY_SUPPORTED
         clarification = Clarification()
         routing = build_routing(primary_intent)
         # Ensure Analysis agent is included for secondary allergen/nutrition intents
@@ -336,11 +459,13 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         nutrients=nutrients,
         constraints=constraints,
         preferences={},
-        comparison=Comparison(),
+        comparison=comparison,
         subtasks=subtasks,
-        context=ContextUsage(),
+
+        context=ContextUsage(used_previous_product=used_previous_product),
         risk_level=risk_level,
         unsupported_requirements=unsupported_requirements,
         clarification=clarification,
         routing=routing,
     )
+

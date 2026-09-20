@@ -70,13 +70,15 @@ CRITICAL INTENT STRINGS (YOU MUST USE ONLY THESE EXACT STRINGS FOR primary_inten
 - "comparison"
 - "dietary_query"
 - "recommendation"
+- "greeting"
 - "unknown"
 
 Rules:
 1. Multi-intent queries: If the user asks about an allergy AND nutrition (e.g. "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"), set primary_intent to "allergen_query" and secondary_intents to ["nutrition_query"].
-2. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
-3. Allergens: List canonical allergen names (e.g. ["peanut"]).
-4. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
+2. Greetings / Help / Thanks: If the user greets (e.g. "Hi", "Hello", "How are you"), asks what the system does ("Who are you?", "Help"), or thanks ("Thank you"), set primary_intent to "greeting".
+3. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
+4. Allergens: List canonical allergen names (e.g. ["peanut"]).
+5. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
 
 Expected JSON format:
 {
@@ -101,6 +103,11 @@ User query: "{query}"
 
 
 INTENT_MAP = {
+    "greeting": Intent.GREETING,
+    "hello": Intent.GREETING,
+    "hi": Intent.GREETING,
+    "help": Intent.GREETING,
+    "thanks": Intent.GREETING,
     "allergy": Intent.ALLERGEN_QUERY,
     "allergen": Intent.ALLERGEN_QUERY,
     "check_allergy_safety": Intent.ALLERGEN_QUERY,
@@ -111,6 +118,7 @@ INTENT_MAP = {
     "diet": Intent.DIETARY_QUERY,
     "recommend": Intent.RECOMMENDATION,
 }
+
 
 
 def _normalize_intent(value: Any) -> Intent:

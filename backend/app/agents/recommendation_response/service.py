@@ -74,16 +74,41 @@ def rank_candidates(evidence: list, query: str, nutrients: list[str]) -> list:
     return sorted(evidence, key=score, reverse=True)
 
 def response_service(request: ResponseRequest) -> ResponseResponse:
+    query_lower = request.query.lower().strip()
+
+    # Case 0: Greeting, help, or conversational query
+    if request.intent == "greeting" or any(w in query_lower for w in ["hi", "hello", "hey", "good morning", "thanks", "thank you"]):
+        if any(w in query_lower for w in ["thanks", "thank you"]):
+            ans = "You're welcome! Feel free to ask whenever you need food, nutrition, or allergen information."
+        elif any(w in query_lower for w in ["who are you", "what can you do", "help", "who made you"]):
+            ans = (
+                "I am EviBite AI, a multi-agent supermarket product intelligence assistant! "
+                "You can ask me to check food ingredients, verify allergen safety (peanuts, milk, soy, gluten), "
+                "check dietary suitability (vegan, vegetarian), compare product nutrition, or scan/lookup product barcodes."
+            )
+        else:
+            ans = (
+                "Hello! I'm EviBite AI, your supermarket product intelligence assistant. "
+                "How can I help you today? You can ask me about product ingredients, allergens, nutrition facts, or dietary suitability."
+            )
+        return ResponseResponse(trace_id=request.trace_id, answer=ans)
+
     # Case 1: query was off-topic / unsupported.
     if request.triage_status == "UNSUPPORTED":
-        return ResponseResponse(
-            trace_id=request.trace_id,
-            answer=(
-                "I am a supermarket product intelligence assistant for "
-                "packaged foods. I cannot answer queries outside food "
-                "product information."
-            ),
-        )
+        store_words = ["price", "cost", "stock", "aisle", "shelf", "branch", "location", "discount", "buy"]
+        if any(w in query_lower for w in store_words):
+            ans = (
+                "I am a supermarket product intelligence assistant for packaged foods via Open Food Facts. "
+                "I do not currently track real-time supermarket branch inventory, live prices, or aisle locations."
+            )
+        else:
+            ans = (
+                "I am a supermarket product intelligence assistant for packaged food products, nutrition, and allergen safety. "
+                "I cannot answer queries outside food product information, but I'd be happy to help with any food or grocery queries!"
+            )
+        return ResponseResponse(trace_id=request.trace_id, answer=ans)
+
+
 
     has_findings = bool(request.analysis and request.analysis.findings)
 

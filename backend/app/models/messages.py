@@ -3,6 +3,9 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+from backend.app.models.triage import ProductEntity
+
+
 class AgentMessage(BaseModel):
     trace_id: str
     from_agent: str
@@ -17,6 +20,7 @@ class AgentMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
     session_id: str | None = Field(default=None, max_length=100)
+    previous_product: ProductEntity | None = Field(default=None)
 
 
 class ExecutionStep(BaseModel):

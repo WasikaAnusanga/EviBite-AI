@@ -9,9 +9,9 @@ from backend.app.agents.agent_stubs import (
     AnalysisRequest,
     RetrievalRequest,
     ResponseRequest,
-    stub_analysis_service,
     stub_response_service,
 )
+from backend.app.agents.nutrition_allergen.service import analysis_service
 from backend.app.agents.retrieval.service import retrieval_service
 from backend.app.agents.triage.service import triage_message
 from backend.app.models.messages import ChatRequest, ChatResponse, ExecutionStep
@@ -24,7 +24,11 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
     execution_path: list[str] = []
 
     # Step 1: Execute Agent 1 (Triage & Routing)
-    triage_req = TriageRequest(message=user_query, session_id=request.session_id)
+    triage_req = TriageRequest(
+        message=user_query,
+        session_id=request.session_id,
+        previous_product=request.previous_product,
+    )
     triage_output = triage_message(triage_req)
     trace_id = triage_output.trace_id
 
@@ -114,9 +118,9 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             nutrients=triage_output.nutrients,
             dietary_requirements=triage_output.dietary_requirements,
             evidence=retrieval_res.candidates,
-            original_query=user_query, 
+            original_query=user_query,
         )
-        analysis_res = stub_analysis_service(analysis_req)
+        analysis_res = analysis_service(analysis_req)
         execution_steps.append(
             ExecutionStep(
                 agent="analysis",
@@ -124,6 +128,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
                 status=analysis_res.safety_status,
             )
         )
+
 
     # Step 4: Execute Agent 4 (Recommendation & Response)
     execution_path.append("response")

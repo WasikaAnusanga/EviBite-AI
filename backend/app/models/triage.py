@@ -12,6 +12,7 @@ class Intent(str, Enum):
     COMPARISON = "comparison"
     DIETARY_QUERY = "dietary_query"
     RECOMMENDATION = "recommendation"
+    GREETING = "greeting"
     UNKNOWN = "unknown"
 
 
@@ -77,6 +78,7 @@ class ContextUsage(BaseModel):
 class TriageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
     session_id: str | None = Field(default=None, max_length=100)
+    previous_product: ProductEntity | None = Field(default=None)
 
 
 class TriageOutput(BaseModel):

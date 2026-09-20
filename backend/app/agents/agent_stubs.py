@@ -95,12 +95,9 @@ class ResponseResponse(BaseModel):
 
 
 def stub_response_service(request: ResponseRequest) -> ResponseResponse:
-    """STUB FOR MEMBER 4: Recommendation & Response Agent."""
-    if request.triage_status == "UNSUPPORTED":
-        return ResponseResponse(
-            trace_id=request.trace_id,
-            answer="I am a supermarket product intelligence assistant for packaged foods. I cannot answer queries outside food product information.",
-        )
+    from backend.app.agents.recommendation_response.service import response_service
+    return response_service(request)
+
 
     lines = []
     if request.analysis and request.analysis.findings:
