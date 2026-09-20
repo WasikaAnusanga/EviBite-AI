@@ -13,3 +13,4 @@ passlib
 pypdf
 python-docx
 python-multipart
+rank-bm25

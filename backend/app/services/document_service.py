@@ -16,6 +16,7 @@ from backend.app.services.document_parser import (
     extract_text_by_pages,
     chunk_document_pages,
 )
+from backend.app.sources.user_documents import invalidate_user_index
 
 UPLOAD_BASE_DIR = os.path.join(os.getcwd(), "uploads", "documents")
 
@@ -82,6 +83,7 @@ def save_user_document(
             chunk_dicts.append(cd)
         db.document_chunks.insert_many(chunk_dicts)
 
+    invalidate_user_index(user_id)
     return doc_meta
 
 
@@ -127,6 +129,7 @@ def delete_user_document(user_id: str, document_id: str) -> bool:
         except Exception:
             pass
 
+    invalidate_user_index(user_id)
     return True
 
 
