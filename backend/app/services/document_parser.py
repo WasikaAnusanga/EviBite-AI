@@ -13,6 +13,11 @@ from backend.app.models.documents import DocumentStatus, DocumentChunk
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv"}
 
+DISALLOWED_EXTENSIONS = {
+    ".exe", ".bat", ".cmd", ".sh", ".py", ".js", ".vbs", ".ps1", ".php",
+    ".pl", ".cgi", ".dll", ".so", ".dylib", ".msi", ".jar", ".com", ".scr"
+}
+
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -22,6 +27,24 @@ ALLOWED_MIME_TYPES = {
     "application/csv",
     "application/octet-stream",  # Fallback if browser sends default
 }
+
+PROMPT_INJECTION_PATTERNS = [
+    r"ignore\s+all\s+previous\s+instructions",
+    r"ignore\s+above\s+instructions",
+    r"you\s+are\s+now\s+an\s+administrator",
+    r"reveal\s+the\s+gemini\s+api\s+key",
+    r"reveal\s+api\s+key",
+    r"system\s*:",
+    r"override\s+security",
+]
+
+
+def sanitize_untrusted_text(text: str) -> str:
+    """Sanitize raw document text to neutralize prompt injection attacks."""
+    sanitized = text
+    for pattern in PROMPT_INJECTION_PATTERNS:
+        sanitized = re.sub(pattern, "[REDACTED_PROMPT_INJECTION_ATTEMPT]", sanitized, flags=re.IGNORECASE)
+    return sanitized
 
 
 def sanitize_filename(filename: str) -> str:
@@ -34,7 +57,7 @@ def sanitize_filename(filename: str) -> str:
 
 
 def validate_upload_file(filename: str, content_bytes: bytes, content_type: str | None = None) -> None:
-    """Validate file extension, size, and content non-emptiness."""
+    """Validate file extension, executable rejection, size, and content non-emptiness."""
     if not content_bytes or len(content_bytes) == 0:
         raise ValueError("Uploaded file is empty.")
 
@@ -42,8 +65,8 @@ def validate_upload_file(filename: str, content_bytes: bytes, content_type: str 
         raise ValueError(f"File size ({round(len(content_bytes) / (1024 * 1024), 2)} MB) exceeds 10 MB limit.")
 
     ext = os.path.splitext(filename.lower())[1]
-    if ext not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"Unsupported file format '{ext}'. Supported formats: PDF, DOCX, TXT, MD, CSV.")
+    if ext in DISALLOWED_EXTENSIONS or ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported or dangerous file format '{ext}'. Allowed formats: PDF, DOCX, TXT, MD, CSV.")
 
 
 def extract_text_by_pages(filename: str, content_bytes: bytes) -> tuple[list[tuple[int, str]], str]:
