@@ -47,11 +47,20 @@ class ProductEntity(BaseModel):
     barcode: str | None = None
 
 
-class Constraint(BaseModel):
-    field: str
-    operator: Literal["<", "<=", "=", ">=", ">"]
-    value: float
+class NutrientConstraint(BaseModel):
+    nutrient: str
+    operator: Literal["lt", "lte", "gt", "gte", "eq"] | None = None
+    value: float | None = None
     unit: str | None = None
+    preference: Literal["minimize", "maximize", "none"] = "none"
+
+    @property
+    def field(self) -> str:
+        return self.nutrient
+
+
+# Alias for backward compatibility
+Constraint = NutrientConstraint
 
 
 class Comparison(BaseModel):
@@ -98,7 +107,8 @@ class TriageOutput(BaseModel):
     dietary_requirements: list[str] = Field(default_factory=list)
     nutrients: list[str] = Field(default_factory=list)
 
-    constraints: list[Constraint] = Field(default_factory=list)
+    nutrient_constraints: list[NutrientConstraint] = Field(default_factory=list)
+    constraints: list[NutrientConstraint] = Field(default_factory=list)
     preferences: dict[str, bool] = Field(default_factory=dict)
 
     comparison: Comparison = Field(default_factory=Comparison)
@@ -111,3 +121,42 @@ class TriageOutput(BaseModel):
 
     clarification: Clarification = Field(default_factory=Clarification)
     routing: RoutingDecision
+
+    @property
+    def intent(self) -> str:
+        return self.primary_intent.value
+
+    @property
+    def product_names(self) -> list[str]:
+        return [p.name for p in self.products if p.name]
+
+    @property
+    def brand(self) -> str | None:
+        for p in self.products:
+            if p.brand:
+                return p.brand
+        return None
+
+    @property
+    def barcode(self) -> str | None:
+        for p in self.products:
+            if p.barcode:
+                return p.barcode
+        return None
+
+    @property
+    def comparison_targets(self) -> list[str]:
+        return [self.comparison.metric] if self.comparison and self.comparison.metric else []
+
+    @property
+    def needs_clarification(self) -> bool:
+        return self.clarification.required
+
+    @property
+    def clarification_question(self) -> str | None:
+        return self.clarification.question
+
+    @property
+    def route(self) -> str | None:
+        return self.routing.next_agent.value if self.routing.next_agent else None
+

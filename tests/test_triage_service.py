@@ -107,8 +107,8 @@ def test_numeric_constraint_extraction():
     out = triage_message(TriageRequest(message="Find snacks with less than 5g sugar"))
     assert len(out.constraints) >= 1
     c = out.constraints[0]
-    assert c.field == "sugars"
-    assert c.operator == "<"
+    assert c.nutrient in ["sugar", "sugars"] or c.field in ["sugar", "sugars"]
+    assert c.operator in ["<", "lt"]
     assert c.value == 5.0
 
 

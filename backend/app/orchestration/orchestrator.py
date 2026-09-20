@@ -117,6 +117,8 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             allergens=triage_output.allergens,
             nutrients=triage_output.nutrients,
             dietary_requirements=triage_output.dietary_requirements,
+            nutrient_constraints=triage_output.nutrient_constraints,
+            constraints=triage_output.constraints,
             evidence=retrieval_res.candidates,
             original_query=user_query,
         )
@@ -139,6 +141,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         triage_status=triage_output.triage_status.value,
         evidence=retrieval_res.candidates,
         analysis=analysis_res,
+        nutrient_constraints=triage_output.nutrient_constraints,
         constraints=triage_output.constraints,
         preferences=triage_output.preferences,
         nutrients=triage_output.nutrients,

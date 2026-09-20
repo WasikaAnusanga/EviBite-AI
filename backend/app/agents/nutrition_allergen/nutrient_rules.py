@@ -36,7 +36,8 @@ DEFAULT_THRESHOLDS: dict[str, dict[Comparator, float]] = {
 def check_nutrient_constraint(
     evidence: dict[str, Any],
     nutrient: str,
-    comparator: Comparator,
+    comparator: Comparator = "low",
+    constraint_obj: Any | None = None,
 ) -> dict[str, Any]:
     field = NUTRIENT_FIELD_MAP.get(nutrient.strip().lower())
     if field is None:
@@ -56,6 +57,35 @@ def check_nutrient_constraint(
             "field": field,
             "value": None,
             "explanation": f"No '{field}' value on record for this product.",
+        }
+
+    # If explicit numeric constraint was passed (e.g. sugar < 10g or protein > 20g)
+    if constraint_obj and getattr(constraint_obj, "value", None) is not None:
+        target_val = constraint_obj.value
+        op = getattr(constraint_obj, "operator", "lte") or "lte"
+        if op == "lt":
+            meets = value < target_val
+        elif op == "lte":
+            meets = value <= target_val
+        elif op == "gt":
+            meets = value > target_val
+        elif op == "gte":
+            meets = value >= target_val
+        elif op == "eq":
+            meets = value == target_val
+        else:
+            meets = value <= target_val
+
+        return {
+            "status": "MEETS_CONSTRAINT" if meets else "DOES_NOT_MEET",
+            "confidence": "high",
+            "field": field,
+            "value": value,
+            "threshold": target_val,
+            "explanation": (
+                f"{field} is {value}, which "
+                f"{'meets' if meets else 'does not meet'} the target constraint of {op} {target_val}."
+            ),
         }
 
     threshold = DEFAULT_THRESHOLDS.get(field, {}).get(comparator)

@@ -79,31 +79,118 @@ def _extract_category(text: str) -> str | None:
     return None
 
 
+CANONICAL_NUTRIENTS = {
+    "sugar": ["sugar", "sugars"],
+    "protein": ["protein", "proteins"],
+    "fat": ["fat", "fats"],
+    "saturated_fat": ["saturated fat", "sat fat", "saturated_fat"],
+    "calories": ["calorie", "calories", "kcal", "energy"],
+    "sodium": ["sodium", "salt"],
+    "carbohydrates": ["carbs", "carbohydrate", "carbohydrates"],
+    "fibre": ["fibre", "fiber"],
+}
+
+
+def _canonicalize_nutrient(name: str) -> str:
+    name_lower = name.lower().strip()
+    for canonical, synonyms in CANONICAL_NUTRIENTS.items():
+        if name_lower in synonyms or any(syn in name_lower for syn in synonyms):
+            return canonical
+    return name_lower
+
+
 def _extract_constraints(text: str) -> list[Constraint]:
     constraints: list[Constraint] = []
-    pattern = r"(less\s+than|under|below|<=|<|more\s+than|over|above|>=|>)\s*(\d+(?:\.\d+)?)\s*(g|mg|kcal|cal)?\s*(sugar|sugars|fat|fats|protein|sodium|calories|energy)?"
-    matches = re.finditer(pattern, text)
-    for m in matches:
-        op_str, val_str, unit, nutrient = m.groups()
-        val = float(val_str)
-        if op_str in ["less than", "under", "below", "<"]:
-            op = "<"
-        elif op_str == "<=":
-            op = "<="
-        elif op_str in ["more than", "over", "above", ">"]:
-            op = ">"
-        elif op_str == ">=":
-            op = ">="
-        else:
-            op = "<="
+    text_lower = text.lower()
 
-        field = nutrient if nutrient else "sugars"
-        if field in ["sugar", "sugars"]:
-            field = "sugars"
-        elif field in ["fat", "fats"]:
-            field = "fat"
-        constraints.append(Constraint(field=field, operator=op, value=val, unit=unit or "g"))
+    pattern_nutrient_first = r"(sugar|sugars|fat|fats|protein|sodium|salt|calories|calorie|energy|carbs|carbohydrates|fibre|fiber|saturated fat)\s*(less\s+than|under|below|<=|<|more\s+than|over|above|>=|>|at\s+most|at\s+least|equal\s+to|=)\s*(\d+(?:\.\d+)?)\s*(g|mg|kcal|cal)?"
+    pattern_op_first = r"(less\s+than|under|below|<=|<|more\s+than|over|above|>=|>|at\s+most|at\s+least|equal\s+to|=)\s*(\d+(?:\.\d+)?)\s*(g|mg|kcal|cal)?\s*(sugar|sugars|fat|fats|protein|sodium|salt|calories|calorie|energy|carbs|carbohydrates|fibre|fiber|saturated fat)?"
+
+    processed_nutrients = set()
+
+    for m in re.finditer(pattern_nutrient_first, text_lower):
+        nut_str, op_str, val_str, unit = m.groups()
+        val = float(val_str)
+        nut = _canonicalize_nutrient(nut_str)
+        if op_str in ["less than", "under", "below", "<"]:
+            op = "lt"
+            pref = "minimize"
+        elif op_str in ["<=", "at most"]:
+            op = "lte"
+            pref = "minimize"
+        elif op_str in ["more than", "over", "above", ">"]:
+            op = "gt"
+            pref = "maximize"
+        elif op_str in [">=", "at least"]:
+            op = "gte"
+            pref = "maximize"
+        elif op_str in ["=", "equal to"]:
+            op = "eq"
+            pref = "none"
+        else:
+            op = "lte"
+            pref = "minimize"
+
+        c = Constraint(nutrient=nut, operator=op, value=val, unit=unit or "g", preference=pref)
+        constraints.append(c)
+        processed_nutrients.add(nut)
+
+    for m in re.finditer(pattern_op_first, text_lower):
+        op_str, val_str, unit, nut_str = m.groups()
+        val = float(val_str)
+        nut = _canonicalize_nutrient(nut_str) if nut_str else "sugar"
+        if nut in processed_nutrients:
+            continue
+        if op_str in ["less than", "under", "below", "<"]:
+            op = "lt"
+            pref = "minimize"
+        elif op_str in ["<=", "at most"]:
+            op = "lte"
+            pref = "minimize"
+        elif op_str in ["more than", "over", "above", ">"]:
+            op = "gt"
+            pref = "maximize"
+        elif op_str in [">=", "at least"]:
+            op = "gte"
+            pref = "maximize"
+        elif op_str in ["=", "equal to"]:
+            op = "eq"
+            pref = "none"
+        else:
+            op = "lte"
+            pref = "minimize"
+
+        c = Constraint(nutrient=nut, operator=op, value=val, unit=unit or "g", preference=pref)
+        constraints.append(c)
+        processed_nutrients.add(nut)
+
+    qualitative_high = ["high", "rich in", "more", "higher", "increased", "lots of", "plenty of"]
+    qualitative_low = ["low", "less", "lower", "reduced", "minimal", "without high"]
+
+    for canonical, synonyms in CANONICAL_NUTRIENTS.items():
+        if canonical in processed_nutrients:
+            continue
+        found_syn = next((s for s in synonyms if s in text_lower), None)
+        if found_syn:
+            if any(f"{h} {found_syn}" in text_lower or f"{found_syn} {h}" in text_lower for h in qualitative_high):
+                c = Constraint(nutrient=canonical, operator=None, value=None, unit=None, preference="maximize")
+                constraints.append(c)
+                processed_nutrients.add(canonical)
+            elif any(f"{l} {found_syn}" in text_lower or f"{found_syn} {l}" in text_lower for l in qualitative_low):
+                c = Constraint(nutrient=canonical, operator=None, value=None, unit=None, preference="minimize")
+                constraints.append(c)
+                processed_nutrients.add(canonical)
+            elif any(h in text_lower for h in qualitative_high) and canonical in ["protein", "fibre", "carbohydrates"]:
+                c = Constraint(nutrient=canonical, operator=None, value=None, unit=None, preference="maximize")
+                constraints.append(c)
+                processed_nutrients.add(canonical)
+            elif any(l in text_lower for l in qualitative_low) and canonical in ["sugar", "fat", "saturated_fat", "sodium", "calories"]:
+                c = Constraint(nutrient=canonical, operator=None, value=None, unit=None, preference="minimize")
+                constraints.append(c)
+                processed_nutrients.add(canonical)
+
     return constraints
+
 
 
 def _extract_comparison(text: str) -> Comparison:
@@ -457,6 +544,7 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         allergens=allergens,
         dietary_requirements=dietary_requirements,
         nutrients=nutrients,
+        nutrient_constraints=constraints,
         constraints=constraints,
         preferences={},
         comparison=comparison,
