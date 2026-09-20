@@ -32,4 +32,8 @@ def init_db():
     db.chat_sessions.create_index([("user_id", ASCENDING)])
     db.chat_messages.create_index([("session_id", ASCENDING)])
     db.chat_messages.create_index([("user_id", ASCENDING)])
+    db.user_documents.create_index([("user_id", ASCENDING)])
+    db.document_chunks.create_index([("user_id", ASCENDING)])
+    db.document_chunks.create_index([("document_id", ASCENDING)])
+
 

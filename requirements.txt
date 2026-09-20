@@ -10,3 +10,6 @@ motor
 pyjwt
 bcrypt
 passlib
+pypdf
+python-docx
+python-multipart
