@@ -302,6 +302,10 @@ def _rank_and_score_candidates(
     if request.category:
         query_words.add(request.category.lower())
 
+    product_names = [
+        p.get("name", "").lower() for p in request.products if isinstance(p, dict) and p.get("name")
+    ]
+
     for ev in candidates:
         field_score = _calculate_query_completeness(ev, request.requested_fields)
         ev.completeness = round((ev.completeness + field_score) / 2.0, 2)
@@ -312,6 +316,10 @@ def _rank_and_score_candidates(
 
         matches = len(query_words.intersection(name_words.union(brand_words).union(cat_words)))
         text_relevance = matches / max(len(query_words), 1)
+
+        ev_name_lower = (ev.name or "").lower()
+        if product_names and any(p_name in ev_name_lower or ev_name_lower in p_name for p_name in product_names if p_name):
+            text_relevance = max(text_relevance, 0.95)
 
         # Combine text relevance / BM25 score with completeness
         combined_relevance = max(ev.relevance_score, text_relevance)
