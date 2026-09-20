@@ -243,5 +243,6 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         execution_path=execution_path,
         execution_steps=execution_steps,
         triage_output=triage_output.model_dump(),
+        sources=response_res.sources,
         final_response=response_res.answer,
     )

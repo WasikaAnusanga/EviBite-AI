@@ -24,8 +24,8 @@ def chat_endpoint(
             detail="Your message could not be processed. Please rephrase your question about a product.",
         )
 
-    # Use the cleaned text going forward
-    request.message = result.cleaned_message
+    # Assign authenticated user_id to request context
+    request.user_id = current_user["id"]
 
     # Run AI multi-agent orchestration
     response = run_orchestration(request)

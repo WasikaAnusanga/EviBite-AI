@@ -48,12 +48,22 @@ const PRESET_BARCODES = [
 ];
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('landing');
+  const [currentView, setCurrentView] = useState(() => {
+    return localStorage.getItem('evibite_token') ? 'app' : 'landing';
+  });
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('evibite_token') || null);
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = localStorage.getItem('evibite_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
+
+  const handleNavigate = (view) => {
+    if ((view === 'signin' || view === 'signup') && authToken) {
+      setCurrentView('app');
+    } else {
+      setCurrentView(view);
+    }
+  };
 
   const [messages, setMessages] = useState([
     {
@@ -288,13 +298,13 @@ export default function App() {
 
 
   if (currentView === 'landing') {
-    return <LandingPage onNavigate={(view) => setCurrentView(view)} />;
+    return <LandingPage onNavigate={handleNavigate} />;
   }
 
   if (currentView === 'signup') {
     return (
       <SignUpPage
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={handleNavigate}
         onAuthSuccess={handleAuthSuccess}
       />
     );
@@ -303,7 +313,7 @@ export default function App() {
   if (currentView === 'signin') {
     return (
       <SignInPage
-        onNavigate={(view) => setCurrentView(view)}
+        onNavigate={handleNavigate}
         onAuthSuccess={handleAuthSuccess}
       />
     );

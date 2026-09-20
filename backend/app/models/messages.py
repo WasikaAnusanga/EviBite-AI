@@ -42,6 +42,7 @@ class ChatResponse(BaseModel):
     execution_path: list[str] = Field(default_factory=list)
     execution_steps: list[ExecutionStep] = Field(default_factory=list)
     triage_output: dict[str, Any]
+    sources: list[dict[str, Any]] = Field(default_factory=list)
     final_response: str
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
