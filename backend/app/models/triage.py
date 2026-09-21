@@ -106,6 +106,8 @@ class TriageOutput(BaseModel):
 
     risk_level: RiskLevel
     unsupported_requirements: list[str] = Field(default_factory=list)
+    extraction_source: str = Field(default="heuristic", description="Source or model used for extraction (e.g. gemini-2.5-flash-lite, gpt-4o-mini, barcode, heuristic)")
 
     clarification: Clarification = Field(default_factory=Clarification)
     routing: RoutingDecision
+
