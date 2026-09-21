@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 from typing import Any
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 from backend.app.models.triage import (
     Constraint,
@@ -19,7 +22,7 @@ class TriageLLMExtraction(BaseModel):
     )
     secondary_intents: list[Intent] = Field(
         default_factory=list,
-        description="Secondary intents if the query contains multiple intents (e.g. ['nutrition_query'] when asking both allergy and sugar content)."
+        description="Secondary intents if the query contains multiple intents."
     )
     products: list[ProductEntity] = Field(
         default_factory=list,
@@ -43,7 +46,7 @@ class TriageLLMExtraction(BaseModel):
     )
     requested_fields: list[str] = Field(
         default_factory=list,
-        description="Fields needed to answer the query (e.g. ingredients, allergens, sugars, protein, calories, dietary_suitability)."
+        description="Fields needed to answer the query."
     )
     constraints: list[Constraint] = Field(
         default_factory=list,
@@ -51,11 +54,15 @@ class TriageLLMExtraction(BaseModel):
     )
     subtasks: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Decomposed subtasks for multi-intent questions. Each dict should have 'intent', 'query_fragment', and 'target_fields'."
+        description="Decomposed subtasks for multi-intent questions."
     )
     unsupported_requirements: list[str] = Field(
         default_factory=list,
-        description="Any requests that cannot be answered from product food data (e.g. store live price, stock, aisle location)."
+        description="Any requests that cannot be answered from food data."
+    )
+    model_used: str | None = Field(
+        default=None,
+        description="The exact LLM model string used for extraction."
     )
 
 
@@ -77,9 +84,11 @@ Rules:
 2. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
 3. Allergens: List canonical allergen names (e.g. ["peanut"]).
 4. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
+5. Single product or brand names: If the user enters a single product or brand name (e.g. "coca cola", "oreo", "nutella", "cheerios"), set primary_intent to "product_search" and products to [{"name": "coca cola"}].
+6. Conversational / Gratitude queries: If the user enters a greeting, gratitude, or conversational closing (e.g. "hi", "hello", "thanks", "okay thanks", "thank you", "got it", "cool"), set primary_intent to "unknown" and products to [].
 
 Expected JSON format:
-{
+{{
   "primary_intent": "allergen_query",
   "secondary_intents": ["nutrition_query"],
   "products": [{"name": "Nutella"}],
@@ -90,11 +99,11 @@ Expected JSON format:
   "requested_fields": ["allergens", "ingredients", "sugars"],
   "constraints": [],
   "subtasks": [
-    {"intent": "allergen_query", "query_fragment": "peanut allergy check", "target_fields": ["allergens"]},
-    {"intent": "nutrition_query", "query_fragment": "sugar content check", "target_fields": ["sugars"]}
+    {{"intent": "allergen_query", "query_fragment": "peanut allergy check", "target_fields": ["allergens"]}},
+    {{"intent": "nutrition_query", "query_fragment": "sugar content check", "target_fields": ["sugars"]}}
   ],
   "unsupported_requirements": []
-}
+}}
 
 User query: "{query}"
 """
@@ -146,20 +155,33 @@ def _normalize_llm_json(data: dict) -> dict:
 
 
 def extract_with_llm(query: str) -> TriageLLMExtraction | None:
-    """Attempt LLM structured extraction using Gemini or OpenAI.
-
-    Returns TriageLLMExtraction on success, or None if no API key is provided
-    or if the LLM call fails.
-    """
+    """Attempt LLM structured extraction using Gemini or OpenAI."""
     api_key = (
         os.getenv("GEMINI_API_KEY")
         or os.getenv("LLM_API_KEY")
         or os.getenv("OPENAI_API_KEY")
     )
     if not api_key:
+        logger.info("[Triage LLM] No API key found. Falling back to heuristic extraction.")
         return None
 
-    # 1. Try Gemini via google-genai
+    models_to_try: list[str] = []
+    env_model = os.getenv("GEMINI_MODEL")
+    if env_model:
+        models_to_try.append(env_model.strip())
+
+    default_models = [
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-flash-lite",
+        "gemini-1.5-flash",
+        "gemini-flash-latest",
+    ]
+    for m in default_models:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
     try:
         from google import genai
         from google.genai import types
@@ -167,7 +189,7 @@ def extract_with_llm(query: str) -> TriageLLMExtraction | None:
         client = genai.Client(api_key=api_key)
         prompt = EXTRACTION_PROMPT_TEMPLATE.format(query=query)
 
-        for model_name in ["gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-1.5-flash"]:
+        for model_name in models_to_try:
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -183,13 +205,16 @@ def extract_with_llm(query: str) -> TriageLLMExtraction | None:
                         raw_text = raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
                     data = json.loads(raw_text)
                     normalized_data = _normalize_llm_json(data)
-                    return TriageLLMExtraction.model_validate(normalized_data)
-            except Exception:
+                    extraction = TriageLLMExtraction.model_validate(normalized_data)
+                    extraction.model_used = model_name
+                    logger.info(f"Triage Agent extracted intent using Gemini model: '{model_name}'")
+                    return extraction
+            except Exception as err:
+                logger.debug(f"[Triage LLM] Model '{model_name}' failed: {err}")
                 continue
-    except Exception:
-        pass
+    except Exception as err:
+        logger.warning(f"[Triage LLM] Gemini SDK initialization error: {err}")
 
-    # 2. Try OpenAI if OpenAI key or client is available
     if os.getenv("OPENAI_API_KEY"):
         try:
             import openai
@@ -205,8 +230,12 @@ def extract_with_llm(query: str) -> TriageLLMExtraction | None:
                 response_format=TriageLLMExtraction,
                 temperature=0.1,
             )
-            return response.choices[0].message.parsed
-        except Exception:
-            pass
+            parsed = response.choices[0].message.parsed
+            if parsed:
+                parsed.model_used = "gpt-4o-mini"
+                logger.info("Triage Agent extracted intent using OpenAI model: 'gpt-4o-mini'")
+                return parsed
+        except Exception as err:
+            logger.warning(f"[Triage LLM] OpenAI fallback error: {err}")
 
     return None

@@ -18,10 +18,17 @@ from backend.app.models.messages import ChatRequest, ChatResponse, ExecutionStep
 from backend.app.models.triage import RouteAgent, TriageRequest, TriageStatus
 from backend.app.agents.recommendation_response.service import response_service
 
+from backend.app.orchestration.session_memory import session_memory
+
+
 def run_orchestration(request: ChatRequest) -> ChatResponse:
     user_query = request.message.strip()
     execution_steps: list[ExecutionStep] = []
     execution_path: list[str] = []
+
+    # Record user query in session memory
+    session_memory.add_user_turn(request.session_id, user_query)
+    chat_history = session_memory.get_formatted_history(request.session_id)
 
     # Step 1: Execute Agent 1 (Triage & Routing)
     triage_req = TriageRequest(message=user_query, session_id=request.session_id)
@@ -37,12 +44,26 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         )
     )
 
-    # Early exit if clarification is required
+    # Delegate clarification through Response Agent for intelligent, natural language asking
     if triage_output.triage_status == TriageStatus.CLARIFICATION_REQUIRED:
-        question = (
-            triage_output.clarification.question
-            or "Could you please specify which product you would like me to check?"
+        execution_path.append("response")
+        resp_obj = response_service(
+            ResponseRequest(
+                trace_id=trace_id,
+                query=user_query,
+                intent=triage_output.primary_intent.value,
+                triage_status=triage_output.triage_status.value,
+                chat_history=chat_history,
+            )
         )
+        execution_steps.append(
+            ExecutionStep(
+                agent="response",
+                action="intelligent_clarification_generation",
+                status="OK",
+            )
+        )
+        session_memory.add_assistant_turn(request.session_id, resp_obj.answer)
         return ChatResponse(
             trace_id=trace_id,
             session_id=request.session_id,
@@ -50,18 +71,19 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             execution_path=execution_path,
             execution_steps=execution_steps,
             triage_output=triage_output.model_dump(),
-            final_response=question,
+            final_response=resp_obj.answer,
         )
 
     # Early exit if query is unsupported
     if triage_output.triage_status == TriageStatus.UNSUPPORTED:
         execution_path.append("response")
-        resp_stub = stub_response_service(
+        resp_obj = response_service(
             ResponseRequest(
                 trace_id=trace_id,
                 query=user_query,
                 intent=triage_output.primary_intent.value,
                 triage_status=triage_output.triage_status.value,
+                chat_history=chat_history,
             )
         )
         execution_steps.append(
@@ -71,6 +93,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
                 status="OK",
             )
         )
+        session_memory.add_assistant_turn(request.session_id, resp_obj.answer)
         return ChatResponse(
             trace_id=trace_id,
             session_id=request.session_id,
@@ -78,7 +101,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             execution_path=execution_path,
             execution_steps=execution_steps,
             triage_output=triage_output.model_dump(),
-            final_response=resp_stub.answer,
+            final_response=resp_obj.answer,
         )
 
     # Step 2: Execute Agent 2 (Product Information Retrieval)
@@ -137,6 +160,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         constraints=triage_output.constraints,
         preferences=triage_output.preferences,
         nutrients=triage_output.nutrients,
+        chat_history=chat_history,
     )
     response_res = response_service(response_req)
     execution_steps.append(
@@ -145,6 +169,17 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             action="grounded_response_generation",
             status="OK",
         )
+    )
+
+    # Record assistant turn and last-mentioned products in session memory
+    extracted_prods = [p.model_dump() for p in triage_output.products]
+    if not extracted_prods and retrieval_res.candidates:
+        extracted_prods = [{"name": c.name, "brand": c.brand, "barcode": c.barcode} for c in retrieval_res.candidates[:3]]
+
+    session_memory.add_assistant_turn(
+        session_id=request.session_id,
+        content=response_res.answer,
+        products=extracted_prods,
     )
 
     return ChatResponse(
@@ -156,3 +191,4 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         triage_output=triage_output.model_dump(),
         final_response=response_res.answer,
     )
+

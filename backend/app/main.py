@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.api.routes.chat import router as chat_router
@@ -11,12 +12,18 @@ app = FastAPI(
     description="Multi-Agent Supermarket Product Intelligence Assistant (Member 1 Orchestration & Triage)",
 )
 
+# Enable CORS for frontend applications
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Identify the caller by IP. In this dev setup everyone hits the API
-    # from the same machine, so this is mainly demonstrating the pattern --
-    # it becomes meaningful once deployed with real distinct clients.
     client_id = request.client.host if request.client else "unknown"
 
     if not rate_limiter.check(client_id):
@@ -34,4 +41,4 @@ app.include_router(chat_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok"}

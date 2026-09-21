@@ -31,6 +31,9 @@ def set_retrieval_source(source: ProductSource) -> None:
     _default_source = source
 
 
+from backend.app.db.food_database import search_local_database
+
+
 def retrieval_service(
     request: RetrievalRequest,
     source: ProductSource | None = None,
@@ -44,14 +47,27 @@ def retrieval_service(
 
     candidates: list[EvidenceObject] = []
 
+    # Strategy 0: Search Curated Local Food Database
+    allergen_keywords = ["milk", "dairy", "lactose", "peanut", "peanuts", "egg", "eggs", "soy", "soya", "gluten", "wheat", "nuts", "hazelnut", "oats", "almond"]
+    found_allergens = [a for a in allergen_keywords if a in request.query.lower()]
+
+    local_matches = search_local_database(
+        query=request.query,
+        category=request.category,
+        allergens=found_allergens,
+        limit=10,
+    )
+    candidates.extend(local_matches)
+
+
     # Strategy A: Exact Barcode Lookup
     if barcode:
         ev = active_source.get_by_barcode(barcode)
         if ev:
             candidates.append(ev)
 
-    # Strategy B: Named Products Search (e.g. Nutella, Cheerios vs Special K)
-    if not candidates and request.products:
+    # Strategy B: Named Products Search
+    if request.products:
         for p in request.products:
             name = p.get("name")
             p_code = p.get("barcode")
@@ -65,29 +81,21 @@ def retrieval_service(
                 results = active_source.search(query=name, category=request.category, limit=5)
                 candidates.extend(results)
 
-    # Strategy C: General / Category Query Search
-    if not candidates and (normalized_query or request.category):
-        candidates = active_source.search(
-            query=normalized_query, category=request.category, limit=10
+    # Strategy C: General / Category Search from Open Food Facts API
+    if (normalized_query or request.category) and len(candidates) < 3:
+        clean_search = _reformulate_query(normalized_query)
+        api_results = active_source.search(
+            query=clean_search, category=request.category, limit=10
         )
+        candidates.extend(api_results)
 
-    # Bounded Reformulation / Retry if 0 candidates found
-    if not candidates and normalized_query:
-        reformulated_query = _reformulate_query(normalized_query)
-        if reformulated_query != normalized_query:
-            logger.info(
-                f"Trace {request.trace_id}: Initial search returned 0 candidates. Retrying with reformulated query: '{reformulated_query}'"
-            )
-            candidates = active_source.search(
-                query=reformulated_query, category=request.category, limit=10
-            )
-
-    # Fallback to realistic test fixtures if external API returns nothing (e.g., offline/rate limit)
+    # Strategy D: Fallback fixtures if candidates empty
     if not candidates:
         candidates = _generate_fallback_fixtures(request)
 
     # 2. Score, Filter, and Rank Top-K Candidates
     ranked_candidates = _rank_and_score_candidates(candidates, request)
+
 
     # 3. Determine Final Status
     status = _determine_status(ranked_candidates, request.requested_fields)

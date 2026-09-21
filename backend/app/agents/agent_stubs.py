@@ -88,6 +88,8 @@ class ResponseRequest(BaseModel):
     constraints: list[Constraint] = Field(default_factory=list)
     preferences: dict[str, bool] = Field(default_factory=dict)
     nutrients: list[str] = Field(default_factory=list)
+    chat_history: list[dict[str, str]] = Field(default_factory=list)
+
     
 class ResponseResponse(BaseModel):
     trace_id: str

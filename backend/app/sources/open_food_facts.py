@@ -22,11 +22,12 @@ USER_AGENT = "EviBiteAI - WebAnalyticsAssignment - Version 1.0 (contact: student
 class OpenFoodFactsSource(ProductSource):
     """ProductSource implementation targeting Open Food Facts public API."""
 
-    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 5.0):
+    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 2.0):
         self.cache_ttl = cache_ttl_seconds
         self.timeout = timeout_seconds
         self._cache: dict[str, tuple[float, Any]] = {}
         self.headers = {"User-Agent": USER_AGENT}
+
 
     def _get_from_cache(self, key: str) -> Any | None:
         if key in self._cache:

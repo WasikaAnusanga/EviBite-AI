@@ -199,6 +199,9 @@ def _heuristic_triage(message: str) -> dict:
     }
 
 
+from backend.app.orchestration.session_memory import session_memory
+
+
 def triage_message(request: TriageRequest) -> TriageOutput:
     message = request.message.strip()
     text = message.lower()
@@ -246,6 +249,7 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         constraints = llm_extracted.constraints
         subtasks = llm_extracted.subtasks
         unsupported_requirements = llm_extracted.unsupported_requirements
+        extraction_source = llm_extracted.model_used or "llm"
     else:
         # Fallback to upgraded heuristic extraction
         parsed = _heuristic_triage(message)
@@ -260,6 +264,46 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         constraints = parsed["constraints"]
         subtasks = parsed["subtasks"]
         unsupported_requirements = parsed["unsupported_requirements"]
+        extraction_source = "heuristic"
+
+    # Multi-turn Pronoun & Follow-up Product Context Resolution
+    used_previous_product = False
+    pronoun_words = ["its", "it", "this", "that", "the product", "the item", "tell me about its", "what about its", "sugar level", "calories"]
+    
+    # Check if query contains an explicit pronoun/referential word
+    words_in_text = set(text.split())
+    has_explicit_pronoun = any(
+        p in text for p in ["its", "the product", "the item", "tell me about its", "what about its"]
+    ) or any(w in words_in_text for w in ["it", "this", "that"])
+
+    # Discovery indicators signaling a NEW standalone topic
+    discovery_indicators = [
+        "give me", "show", "find", "recommend", "products containing", "options",
+        "list", "what products", "which products", "search", "best", "low sugar", "high protein"
+    ]
+    is_new_topic = any(ind in text for ind in discovery_indicators)
+
+    has_valid_product = any(p.name or p.barcode for p in products)
+
+    # ONLY restore previous products if query has an explicit pronoun AND is NOT a new topic search
+    if has_explicit_pronoun and not is_new_topic and not has_valid_product and request.session_id:
+        last_prods = session_memory.get_last_products(request.session_id)
+        if last_prods:
+            restored_entities = []
+            for lp in last_prods:
+                if lp.get("name") or lp.get("barcode"):
+                    restored_entities.append(
+                        ProductEntity(
+                            name=lp.get("name"),
+                            brand=lp.get("brand"),
+                            barcode=lp.get("barcode"),
+                        )
+                    )
+            if restored_entities:
+                products = restored_entities
+                used_previous_product = True
+
+
 
     # 3. Deterministic Python Safety & Risk Assessment
     if allergens or primary_intent == Intent.ALLERGEN_QUERY or Intent.ALLERGEN_QUERY in secondary_intents:
@@ -275,17 +319,37 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         risk_level = RiskLevel.LOW
 
     # 4. Check Clarification Need
-    needs_product = primary_intent in {
-        Intent.PRODUCT_SEARCH,
-        Intent.ALLERGEN_QUERY,
-        Intent.NUTRITION_QUERY,
-        Intent.DIETARY_QUERY,
+    discovery_indicators = ["give me", "show", "find", "recommend", "products containing", "options", "list", "what products", "which", "products", "search", "best", "low", "high"]
+    is_discovery_query = (
+        any(ind in text for ind in discovery_indicators)
+        or bool(allergens)
+        or bool(nutrients)
+        or bool(dietary_requirements)
+        or bool(category)
+        or primary_intent in {Intent.RECOMMENDATION, Intent.COMPARISON}
+    )
+
+    conversational_words = {
+        "thanks", "thank you", "okay thanks", "ok thanks", "thank u", "thanks!",
+        "thank you so much", "thanks for your help", "thanks a lot",
+        "got it", "cool", "great", "awesome", "sounds good", "perfect", "cheers",
+        "bye", "goodbye", "hi", "hello", "hey", "good morning", "good evening", "ok", "okay"
     }
+    clean_text = text.strip("!.?,")
+    is_conversational = (
+        clean_text in conversational_words
+        or any(clean_text.startswith(w) for w in ["thanks", "thank you", "okay thanks", "ok thanks", "got it", "cool", "sounds good", "bye", "hi", "hello"])
+    )
+
     has_valid_product = any(p.name or p.barcode for p in products)
 
     missing_fields: list[str] = []
-    if needs_product and not has_valid_product:
+    # Only require clarification if user asks a specific single-item question with no product name or search criteria
+    if not is_discovery_query and not has_valid_product and not is_conversational:
         missing_fields.append("product")
+
+    if is_conversational and not has_valid_product:
+        primary_intent = Intent.UNKNOWN
 
     if missing_fields:
         status = TriageStatus.CLARIFICATION_REQUIRED
@@ -299,6 +363,7 @@ def triage_message(request: TriageRequest) -> TriageOutput:
             required_agents=[],
             analysis_required=False,
         )
+
     elif primary_intent == Intent.UNKNOWN:
         status = TriageStatus.UNSUPPORTED
         clarification = Clarification()
@@ -338,9 +403,11 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         preferences={},
         comparison=Comparison(),
         subtasks=subtasks,
-        context=ContextUsage(),
+        context=ContextUsage(used_previous_product=used_previous_product),
         risk_level=risk_level,
+
         unsupported_requirements=unsupported_requirements,
+        extraction_source=extraction_source,
         clarification=clarification,
         routing=routing,
     )
