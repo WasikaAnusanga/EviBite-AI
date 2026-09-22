@@ -1,20 +1,53 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
+import SettingsModal from './components/SettingsModal';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import { sendChatMessage, getCurrentUser } from './services/api';
+import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
+import logoImg from './logo/logo.png';
 import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut } from 'lucide-react';
 
 function ChatDashboard({ user, onSignOut }) {
-  const [sessions, setSessions] = useState([
-    { id: 'session-1', title: 'Product Safety Check', messages: [] }
-  ]);
-  const [currentSessionId, setCurrentSessionId] = useState('session-1');
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const messagesEndRef = useRef(null);
+
+  const userId = user ? (user.id || user.email) : null;
+
+  // Load user chat sessions from MongoDB when user updates / logs in
+  useEffect(() => {
+    async function loadSessions() {
+      if (userId) {
+        const userDbSessions = await fetchUserSessions(userId);
+        if (userDbSessions && userDbSessions.length > 0) {
+          const formatted = userDbSessions.map(s => ({
+            id: s.id,
+            title: s.title || 'New Chat',
+            messages: (s.messages || []).map((m, idx) => ({
+              id: `msg-${idx}-${Date.now()}`,
+              sender: m.role === 'assistant' ? 'ai' : m.role,
+              text: m.content,
+              products: m.products || [],
+              timestamp: m.timestamp || new Date().toISOString(),
+            })),
+          }));
+          setSessions(formatted);
+          setCurrentSessionId(formatted[0].id);
+          return;
+        }
+      }
+      // Guest user or empty database: start fresh session
+      const newId = `session-${Date.now()}`;
+      setSessions([{ id: newId, title: 'New Chat', messages: [] }]);
+      setCurrentSessionId(newId);
+    }
+    loadSessions();
+  }, [userId]);
 
   const activeSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
   const messages = activeSession ? activeSession.messages : [];
@@ -38,8 +71,48 @@ function ChatDashboard({ user, onSignOut }) {
     setCurrentSessionId(newId);
   };
 
-  const handleSelectSession = (id) => {
+  const handleSelectSession = async (id) => {
     setCurrentSessionId(id);
+    const sess = sessions.find(s => s.id === id);
+    if (sess && sess.messages.length === 0 && userId) {
+      try {
+        const fullDoc = await fetchSessionHistory(id, userId);
+        if (fullDoc && fullDoc.messages) {
+          const formattedMsgs = fullDoc.messages.map((m, idx) => ({
+            id: `msg-${idx}`,
+            sender: m.role === 'assistant' ? 'ai' : m.role,
+            text: m.content,
+            products: m.products || [],
+            timestamp: m.timestamp || new Date().toISOString(),
+          }));
+          setSessions(prev => prev.map(s => s.id === id ? { ...s, messages: formattedMsgs } : s));
+        }
+      } catch (err) {
+        console.error('Error loading session detail:', err);
+      }
+    }
+  };
+
+  const handleDeleteSession = async (id) => {
+    try {
+      if (userId) {
+        await deleteChatSession(id, userId);
+      }
+    } catch (e) {
+      console.error('Failed deleting chat session:', e);
+    }
+    setSessions(prev => {
+      const filtered = prev.filter(s => s.id !== id);
+      if (filtered.length === 0) {
+        const newId = `session-${Date.now()}`;
+        setCurrentSessionId(newId);
+        return [{ id: newId, title: 'New Chat', messages: [] }];
+      }
+      if (currentSessionId === id) {
+        setCurrentSessionId(filtered[0].id);
+      }
+      return filtered;
+    });
   };
 
   const handleSendMessage = async (userText) => {
@@ -52,10 +125,10 @@ function ChatDashboard({ user, onSignOut }) {
 
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
-        const firstMsg = s.messages.length === 0;
+        const isFirstMsg = s.messages.length === 0;
         return {
           ...s,
-          title: firstMsg ? (userText.length > 28 ? userText.substring(0, 28) + '...' : userText) : s.title,
+          title: isFirstMsg ? (userText.length > 28 ? userText.substring(0, 28) + '...' : userText) : s.title,
           messages: [...s.messages, userMsg],
         };
       }
@@ -65,7 +138,7 @@ function ChatDashboard({ user, onSignOut }) {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userText, currentSessionId);
+      const response = await sendChatMessage(userText, currentSessionId, userId);
       
       const aiMsg = {
         id: `msg-ai-${Date.now()}`,
@@ -131,7 +204,7 @@ function ChatDashboard({ user, onSignOut }) {
       title: 'Dietary Suitability',
       sub: 'Verify if Oreos are 100% vegan certified',
       prompt: 'Are Oreo biscuits suitable for a strict vegan diet?',
-      icon: <Search size={18} color="#10b981" />,
+      icon: <Search size={18} color="#22c55e" />,
     },
   ];
 
@@ -142,46 +215,39 @@ function ChatDashboard({ user, onSignOut }) {
         currentSessionId={currentSessionId}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
+        user={user}
+        onSignOut={onSignOut}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <main className="chat-stage">
         <header className="chat-header">
           <div className="chat-title">
+            <img src={logoImg} alt="EviBite AI" className="header-logo-img" />
             <h1>{activeSession?.title || 'Chat'}</h1>
             <span className="tag-badge">Multi-Agent Intelligence</span>
           </div>
 
-          <div className="user-profile-menu">
-            {user ? (
-              <div className="user-badge-pill">
-                <div className="user-avatar-sm">
-                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
-                <span className="user-name-text">{user.name}</span>
-                <button className="signout-btn" onClick={onSignOut} title="Sign Out">
-                  <LogOut size={16} />
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Link to="/login" className="auth-trigger-btn">
-                  <LogIn size={16} />
-                  <span>Sign In</span>
-                </Link>
-                <Link to="/register" className="auth-trigger-btn" style={{ background: 'linear-gradient(135deg, var(--accent-emerald), #059669)', border: 'none' }}>
-                  <UserPlus size={16} />
-                  <span>Register</span>
-                </Link>
-              </div>
-            )}
-          </div>
+          {!user && (
+            <div className="header-auth-group">
+              <Link to="/login" className="auth-trigger-btn signin">
+                <LogIn size={16} />
+                <span>Sign In</span>
+              </Link>
+              <Link to="/register" className="auth-trigger-btn register">
+                <UserPlus size={16} />
+                <span>Register</span>
+              </Link>
+            </div>
+          )}
         </header>
 
         <div className="messages-container">
           {messages.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">
-                <Sparkles size={28} />
+              <div className="empty-logo-wrapper">
+                <img src={logoImg} alt="EviBite AI Logo" className="empty-logo-img" />
               </div>
               <h2 className="empty-title">What would you like to verify today?</h2>
               <p className="empty-subtitle">
@@ -213,7 +279,7 @@ function ChatDashboard({ user, onSignOut }) {
           {isLoading && (
             <div className="message-row">
               <div className="avatar ai-avatar">
-                <Sparkles size={18} />
+                <img src={logoImg} alt="AI Avatar" className="avatar-logo-img" />
               </div>
               <div className="message-content">
                 <div className="message-header">
@@ -233,12 +299,38 @@ function ChatDashboard({ user, onSignOut }) {
 
         <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
       </main>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        user={user}
+      />
     </div>
   );
 }
 
+function ProtectedRoute({ children, user, isAuthChecking }) {
+  if (isAuthChecking) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F9F5', color: '#1B241D' }}>
+        <div style={{ textAlign: 'center' }}>
+          <img src={logoImg} alt="EviBite AI" style={{ width: '48px', height: '48px', marginBottom: '12px', objectFit: 'contain' }} />
+          <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>Loading EviBite AI...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('evibite_auth_token');
@@ -260,7 +352,12 @@ export default function App() {
           localStorage.removeItem('evibite_auth_token');
           localStorage.removeItem('evibite_user');
           setUser(null);
+        })
+        .finally(() => {
+          setIsAuthChecking(false);
         });
+    } else {
+      setIsAuthChecking(false);
     }
   }, []);
 
@@ -275,7 +372,11 @@ export default function App() {
       <Routes>
         <Route
           path="/"
-          element={<ChatDashboard user={user} onSignOut={handleSignOut} />}
+          element={
+            <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
+              <ChatDashboard user={user} onSignOut={handleSignOut} />
+            </ProtectedRoute>
+          }
         />
         <Route
           path="/login"
@@ -285,6 +386,7 @@ export default function App() {
           path="/register"
           element={<RegisterPage onRegisterSuccess={(userData) => setUser(userData)} />}
         />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

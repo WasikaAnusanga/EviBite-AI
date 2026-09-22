@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerUser } from '../services/api';
+import logoImg from '../logo/logo.png';
 import { Sparkles, User, Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
 
 export default function RegisterPage({ onRegisterSuccess }) {
@@ -49,19 +50,11 @@ export default function RegisterPage({ onRegisterSuccess }) {
 
   return (
     <div className="auth-page-container">
-      {/* Top back navigation bar */}
-      <div className="auth-page-nav">
-        <Link to="/" className="back-link-btn">
-          <ChevronLeft size={18} />
-          <span>Back to EviBite AI</span>
-        </Link>
-      </div>
-
       <div className="auth-page-content">
         {/* Left Side: Brand & Benefits Showcase */}
         <div className="auth-hero-section">
           <div className="hero-brand-badge">
-            <Sparkles size={24} className="hero-icon-sparkle" />
+            <img src={logoImg} alt="EviBite AI Logo" className="auth-hero-logo-img" />
             <span className="hero-brand-name">EviBite AI</span>
           </div>
 
