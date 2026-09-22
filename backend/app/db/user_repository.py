@@ -96,10 +96,11 @@ class UserRepository:
                 if user_doc:
                     user_doc["_id"] = str(user_doc["_id"])
                     return user_doc
+                return None  # Direct database source of truth
             except Exception as e:
                 logger.error(f"MongoDB lookup error: {e}")
         
-        # Memory fallback search
+        # Memory fallback search only if DB connection is offline
         return self._memory_users.get(email_clean)
 
     def find_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -110,17 +111,18 @@ class UserRepository:
                 if user_doc:
                     user_doc["_id"] = str(user_doc["_id"])
                     return user_doc
+                return None  # Direct database source of truth
             except Exception as e:
                 logger.error(f"MongoDB lookup error: {e}")
 
-        # Memory fallback search
+        # Memory fallback search only if DB connection is offline
         for user in self._memory_users.values():
             if user.get("id") == user_id:
                 return user
         return None
 
     def create_user(self, name: str, email: str, password: str) -> Dict[str, Any]:
-        """Register a new user in MongoDB."""
+        """Register a new user in MongoDB securely."""
         email_clean = email.lower().strip()
         
         if self.find_by_email(email_clean):
@@ -140,11 +142,16 @@ class UserRepository:
 
         if self.collection is not None:
             try:
+                from pymongo.errors import DuplicateKeyError
                 self.collection.insert_one(user_doc.copy())
+            except DuplicateKeyError:
+                raise ValueError("User with this email already exists")
             except Exception as e:
                 logger.error(f"MongoDB insert user error: {e}")
+                raise ValueError(f"Failed to create user in database: {str(e)}")
+        else:
+            self._memory_users[email_clean] = user_doc
 
-        self._memory_users[email_clean] = user_doc
         return {
             "id": user_id,
             "name": user_doc["name"],
