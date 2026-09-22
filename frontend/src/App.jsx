@@ -1,50 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
-import AuthModal from './components/AuthModal';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import { sendChatMessage, getCurrentUser } from './services/api';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut } from 'lucide-react';
 
-export default function App() {
+function ChatDashboard({ user, onSignOut }) {
   const [sessions, setSessions] = useState([
     { id: 'session-1', title: 'Product Safety Check', messages: [] }
   ]);
   const [currentSessionId, setCurrentSessionId] = useState('session-1');
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('evibite_auth_token');
-    const savedUser = localStorage.getItem('evibite_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        // ignore parse error
-      }
-    }
-    if (token) {
-      getCurrentUser(token)
-        .then((userData) => {
-          setUser(userData);
-          localStorage.setItem('evibite_user', JSON.stringify(userData));
-        })
-        .catch(() => {
-          localStorage.removeItem('evibite_auth_token');
-          localStorage.removeItem('evibite_user');
-          setUser(null);
-        });
-    }
-  }, []);
-
-  const handleSignOut = () => {
-    localStorage.removeItem('evibite_auth_token');
-    localStorage.removeItem('evibite_user');
-    setUser(null);
-  };
 
   const activeSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
   const messages = activeSession ? activeSession.messages : [];
@@ -80,7 +50,6 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
 
-    // Update state immediately with user message
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
         const firstMsg = s.messages.length === 0;
@@ -189,15 +158,21 @@ export default function App() {
                   {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <span className="user-name-text">{user.name}</span>
-                <button className="signout-btn" onClick={handleSignOut} title="Sign Out">
+                <button className="signout-btn" onClick={onSignOut} title="Sign Out">
                   <LogOut size={16} />
                 </button>
               </div>
             ) : (
-              <button className="auth-trigger-btn" onClick={() => setIsAuthModalOpen(true)}>
-                <LogIn size={16} />
-                <span>Sign In / Register</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Link to="/login" className="auth-trigger-btn">
+                  <LogIn size={16} />
+                  <span>Sign In</span>
+                </Link>
+                <Link to="/register" className="auth-trigger-btn" style={{ background: 'linear-gradient(135deg, var(--accent-emerald), #059669)', border: 'none' }}>
+                  <UserPlus size={16} />
+                  <span>Register</span>
+                </Link>
+              </div>
             )}
           </div>
         </header>
@@ -258,12 +233,59 @@ export default function App() {
 
         <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
       </main>
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={(userData) => setUser(userData)}
-      />
     </div>
+  );
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('evibite_auth_token');
+    const savedUser = localStorage.getItem('evibite_user');
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+    if (token) {
+      getCurrentUser(token)
+        .then((userData) => {
+          setUser(userData);
+          localStorage.setItem('evibite_user', JSON.stringify(userData));
+        })
+        .catch(() => {
+          localStorage.removeItem('evibite_auth_token');
+          localStorage.removeItem('evibite_user');
+          setUser(null);
+        });
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('evibite_auth_token');
+    localStorage.removeItem('evibite_user');
+    setUser(null);
+  };
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={<ChatDashboard user={user} onSignOut={handleSignOut} />}
+        />
+        <Route
+          path="/login"
+          element={<LoginPage onLoginSuccess={(userData) => setUser(userData)} />}
+        />
+        <Route
+          path="/register"
+          element={<RegisterPage onRegisterSuccess={(userData) => setUser(userData)} />}
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
