@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
-import { sendChatMessage } from './services/api';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import { sendChatMessage, getCurrentUser } from './services/api';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 
 export default function App() {
   const [sessions, setSessions] = useState([
@@ -11,7 +12,39 @@ export default function App() {
   ]);
   const [currentSessionId, setCurrentSessionId] = useState('session-1');
   const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('evibite_auth_token');
+    const savedUser = localStorage.getItem('evibite_user');
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+    if (token) {
+      getCurrentUser(token)
+        .then((userData) => {
+          setUser(userData);
+          localStorage.setItem('evibite_user', JSON.stringify(userData));
+        })
+        .catch(() => {
+          localStorage.removeItem('evibite_auth_token');
+          localStorage.removeItem('evibite_user');
+          setUser(null);
+        });
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('evibite_auth_token');
+    localStorage.removeItem('evibite_user');
+    setUser(null);
+  };
 
   const activeSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
   const messages = activeSession ? activeSession.messages : [];
@@ -148,6 +181,25 @@ export default function App() {
             <h1>{activeSession?.title || 'Chat'}</h1>
             <span className="tag-badge">Multi-Agent Intelligence</span>
           </div>
+
+          <div className="user-profile-menu">
+            {user ? (
+              <div className="user-badge-pill">
+                <div className="user-avatar-sm">
+                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <span className="user-name-text">{user.name}</span>
+                <button className="signout-btn" onClick={handleSignOut} title="Sign Out">
+                  <LogOut size={16} />
+                </button>
+              </div>
+            ) : (
+              <button className="auth-trigger-btn" onClick={() => setIsAuthModalOpen(true)}>
+                <LogIn size={16} />
+                <span>Sign In / Register</span>
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="messages-container">
@@ -206,6 +258,12 @@ export default function App() {
 
         <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
       </main>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(userData) => setUser(userData)}
+      />
     </div>
   );
 }
