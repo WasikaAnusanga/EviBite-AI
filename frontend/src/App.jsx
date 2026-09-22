@@ -8,7 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight } from 'lucide-react';
 
 function ChatDashboard({ user, onSignOut }) {
   const [sessions, setSessions] = useState([]);
@@ -186,25 +186,25 @@ function ChatDashboard({ user, onSignOut }) {
       title: 'Peanut Allergy Check',
       sub: 'Does Nutella contain peanuts or nut traces?',
       prompt: 'I have a peanut allergy. Can I safely eat Nutella?',
-      icon: <ShieldCheck size={18} color="#f43f5e" />,
+      icon: <ShieldCheck size={20} color="#46803A" />,
     },
     {
       title: 'Sugar & Nutrition Query',
       sub: 'Check sugar and calorie content of Coca-Cola',
       prompt: 'How much sugar is in Coca-Cola and what are its nutrition facts?',
-      icon: <HeartPulse size={18} color="#f59e0b" />,
+      icon: <HeartPulse size={20} color="#46803A" />,
     },
     {
       title: 'Product Comparison',
       sub: 'Compare ingredients between Coke Zero and Pepsi Max',
       prompt: 'Compare Coca-Cola Zero vs Pepsi Max regarding artificial sweeteners.',
-      icon: <Scale size={18} color="#06b6d4" />,
+      icon: <Scale size={20} color="#46803A" />,
     },
     {
       title: 'Dietary Suitability',
       sub: 'Verify if Oreos are 100% vegan certified',
       prompt: 'Are Oreo biscuits suitable for a strict vegan diet?',
-      icon: <Search size={18} color="#22c55e" />,
+      icon: <Search size={20} color="#46803A" />,
     },
   ];
 
@@ -245,27 +245,38 @@ function ChatDashboard({ user, onSignOut }) {
 
         <div className="messages-container">
           {messages.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state-redesigned">
+              <div className="welcome-hero-badge">
+                <Sparkles size={14} color="#46803A" />
+                <span>Supermarket Product Intelligence</span>
+              </div>
+
               <div className="empty-logo-wrapper">
                 <img src={logoImg} alt="EviBite AI Logo" className="empty-logo-img" />
               </div>
+
               <h2 className="empty-title">What would you like to verify today?</h2>
               <p className="empty-subtitle">
                 Ask about packaged supermarket foods, allergen safety, ingredients, or nutritional comparisons.
               </p>
 
-              <div className="starter-chips">
+              <div className="starter-grid-redesigned">
                 {starterPrompts.map((item, idx) => (
                   <button
                     key={idx}
-                    className="chip-btn"
+                    className="starter-card-btn"
                     onClick={() => handleSendMessage(item.prompt)}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {item.icon}
-                      <span className="chip-title">{item.title}</span>
+                    <div className="starter-card-top">
+                      <div className="starter-icon-badge">
+                        {item.icon}
+                      </div>
+                      <ArrowRight size={16} className="starter-card-arrow" />
                     </div>
-                    <span className="chip-sub">{item.sub}</span>
+                    <div className="starter-card-body">
+                      <span className="starter-card-title">{item.title}</span>
+                      <span className="starter-card-sub">{item.sub}</span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -277,7 +288,7 @@ function ChatDashboard({ user, onSignOut }) {
           )}
 
           {isLoading && (
-            <div className="message-row">
+            <div className="message-row thinking-row">
               <div className="avatar ai-avatar">
                 <img src={logoImg} alt="AI Avatar" className="avatar-logo-img" />
               </div>
@@ -285,10 +296,16 @@ function ChatDashboard({ user, onSignOut }) {
                 <div className="message-header">
                   <span>EviBite AI</span>
                 </div>
-                <div className="typing-indicator">
-                  <div className="dot" />
-                  <div className="dot" />
-                  <div className="dot" />
+                <div className="thinking-bubble">
+                  <div className="thinking-header">
+                    <Sparkles size={16} className="thinking-sparkle-spin" />
+                    <span>Analyzing supermarket product evidence...</span>
+                  </div>
+                  <div className="typing-dots">
+                    <span className="dot dot-1" />
+                    <span className="dot dot-2" />
+                    <span className="dot dot-3" />
+                  </div>
                 </div>
               </div>
             </div>

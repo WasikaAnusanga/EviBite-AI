@@ -51,9 +51,6 @@ export default function ChatInput({ onSendMessage, disabled }) {
           <Send size={18} />
         </button>
       </form>
-      <div className="input-footer-note">
-        EviBite AI can verify food allergens, nutrition facts, and dietary safety across supermarket products.
-      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Plus, MessageSquare, ShieldCheck, Sparkles, Cpu, Settings, LogOut, 
+  Plus, MessageSquare, ShieldCheck, Sparkles, Settings, LogOut, 
   ChevronRight, ChevronUp, User, Sliders, HelpCircle, LogIn, UserPlus 
 } from 'lucide-react';
 
@@ -87,15 +87,6 @@ export default function Sidebar({
             </div>
           ))
         )}
-      </div>
-
-      {/* Model Indicator */}
-      <div className="sidebar-model-info">
-        <div className="model-badge">
-          <div className="status-dot" />
-          <Cpu size={14} />
-          <span>Gemini 3.1 Flash-Lite</span>
-        </div>
       </div>
 
       {/* Bottom Left Corner User Profile & Popup Menu */}
