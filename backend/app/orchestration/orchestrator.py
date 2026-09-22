@@ -19,6 +19,20 @@ from backend.app.models.triage import RouteAgent, TriageRequest, TriageStatus
 from backend.app.agents.recommendation_response.service import response_service
 
 from backend.app.orchestration.session_memory import session_memory
+from backend.app.db.chat_repository import chat_repo
+
+
+def _persist_session_to_db(request: ChatRequest, fallback_query: str) -> None:
+    if request.session_id:
+        turns = session_memory.get_all_turns(request.session_id)
+        first_user = next((t["content"] for t in turns if t.get("role") == "user"), fallback_query)
+        chat_repo.save_or_update_session(
+            session_id=request.session_id,
+            user_id=request.user_id,
+            title=first_user,
+            messages=turns,
+        )
+
 
 
 def run_orchestration(request: ChatRequest) -> ChatResponse:
@@ -64,6 +78,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             )
         )
         session_memory.add_assistant_turn(request.session_id, resp_obj.answer)
+        _persist_session_to_db(request, user_query)
         return ChatResponse(
             trace_id=trace_id,
             session_id=request.session_id,
@@ -94,6 +109,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
             )
         )
         session_memory.add_assistant_turn(request.session_id, resp_obj.answer)
+        _persist_session_to_db(request, user_query)
         return ChatResponse(
             trace_id=trace_id,
             session_id=request.session_id,
@@ -181,6 +197,8 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         content=response_res.answer,
         products=extracted_prods,
     )
+
+    _persist_session_to_db(request, user_query)
 
     return ChatResponse(
         trace_id=trace_id,

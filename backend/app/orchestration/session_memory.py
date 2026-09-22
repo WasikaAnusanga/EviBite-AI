@@ -65,6 +65,22 @@ class SessionMemoryStore:
         recent = session.turns[-max_turns:]
         return [{"role": t.role, "content": t.content} for t in recent]
 
+    def get_all_turns(self, session_id: str | None) -> list[dict[str, Any]]:
+        session = self.get_or_create_session(session_id)
+        return [t.model_dump() for t in session.turns]
+
+    def load_history(self, session_id: str, turns: list[dict[str, Any]]) -> None:
+        session = SessionState(session_id=session_id)
+        for t in turns:
+            session.turns.append(
+                ChatTurn(
+                    role=t.get("role", "user"),
+                    content=t.get("content", ""),
+                    products=t.get("products", []),
+                )
+            )
+        self._sessions[session_id] = session
+
 
 # Global session memory singleton instance
 session_memory = SessionMemoryStore()

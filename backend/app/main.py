@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.chat import router as chat_router
 from backend.app.api.routes.triage import router as triage_router
 from backend.app.security.rate_limiter import rate_limiter
@@ -35,6 +36,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+app.include_router(auth_router)
 app.include_router(triage_router)
 app.include_router(chat_router)
 
