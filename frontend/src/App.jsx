@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
+import LandingPage from './components/LandingPage';
 import { sendChatMessage } from './services/api';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, ArrowLeft } from 'lucide-react';
 
 export default function App() {
+  const [viewMode, setViewMode] = useState('landing'); // 'landing' or 'app'
   const [sessions, setSessions] = useState([
     { id: 'session-1', title: 'Product Safety Check', messages: [] }
   ]);
@@ -21,8 +23,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (viewMode === 'app') {
+      scrollToBottom();
+    }
+  }, [messages, isLoading, viewMode]);
+
+  if (viewMode === 'landing') {
+    return <LandingPage onLaunchApp={() => setViewMode('app')} />;
+  }
 
   const handleNewChat = () => {
     const newId = `session-${Date.now()}`;
@@ -144,7 +152,14 @@ export default function App() {
 
       <main className="chat-stage">
         <header className="chat-header">
-          <div className="chat-title">
+          <div className="chat-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button 
+              className="btn-secondary" 
+              onClick={() => setViewMode('landing')}
+              style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <ArrowLeft size={14} /> Back to Landing Page
+            </button>
             <h1>{activeSession?.title || 'Chat'}</h1>
             <span className="tag-badge">Multi-Agent Intelligence</span>
           </div>
