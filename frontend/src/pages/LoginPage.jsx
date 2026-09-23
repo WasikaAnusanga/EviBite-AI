@@ -35,10 +35,10 @@ export default function LoginPage({ onLoginSuccess }) {
       <div className="auth-page-content">
         {/* Left Side: Brand & Feature Showcase */}
         <div className="auth-hero-section">
-          <div className="hero-brand-badge">
+          <Link to="/" className="hero-brand-badge" style={{ textDecoration: 'none', cursor: 'pointer' }}>
             <img src={logoImg} alt="EviBite AI Logo" className="auth-hero-logo-img" />
             <span className="hero-brand-name">EviBite AI</span>
-          </div>
+          </Link>
 
           <h1 className="hero-headline">
             Smart & Grounded <br />
