@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Settings as SettingsIcon, ShieldAlert, Cpu, User, Sliders, Check, Moon, Bell } from 'lucide-react';
 
-export default function SettingsModal({ isOpen, onClose, user }) {
-  const [activeTab, setActiveTab] = useState('general');
+export default function SettingsModal({ isOpen, onClose, user, initialTab = 'general' }) {
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
   const [sessionMemoryEnabled, setSessionMemoryEnabled] = useState(true);
   const [allergens, setAllergens] = useState({
     peanut: true,

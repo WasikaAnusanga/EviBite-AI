@@ -16,6 +16,7 @@ export default function Sidebar({
   user,
   onSignOut,
   onOpenSettings,
+  onOpenHelp,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -107,29 +108,29 @@ export default function Sidebar({
 
             <div className="popup-menu-divider" />
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); onOpenSettings(); }}>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('general'); }}>
               <Sparkles size={16} />
               <span>Upgrade plan</span>
             </button>
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); onOpenSettings(); }}>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('allergens'); }}>
               <Sliders size={16} />
               <span>Personalization</span>
             </button>
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); onOpenSettings(); }}>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('account'); }}>
               <User size={16} />
               <span>Profile</span>
             </button>
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); onOpenSettings(); }}>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('general'); }}>
               <Settings size={16} />
               <span>Settings</span>
             </button>
 
             <div className="popup-menu-divider" />
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); alert('EviBite AI Help & Support\nVersion 0.1.0 (Multi-Agent Intelligence)'); }}>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenHelp) onOpenHelp(); }}>
               <HelpCircle size={16} />
               <span>Help</span>
               <ChevronRight size={14} className="right-arrow" />

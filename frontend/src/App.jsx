@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import SettingsModal from './components/SettingsModal';
+import HelpModal from './components/HelpModal';
 import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -16,6 +17,8 @@ function ChatDashboard({ user, onSignOut }) {
   const [currentSessionId, setCurrentSessionId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('general');
   const messagesEndRef = useRef(null);
 
   const userId = user ? (user.id || user.email) : null;
@@ -219,7 +222,11 @@ function ChatDashboard({ user, onSignOut }) {
         onDeleteSession={handleDeleteSession}
         user={user}
         onSignOut={onSignOut}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={(tab = 'general') => {
+          setSettingsTab(tab);
+          setIsSettingsOpen(true);
+        }}
+        onOpenHelp={() => setIsHelpOpen(true)}
       />
 
       <main className="chat-stage">
@@ -329,6 +336,12 @@ function ChatDashboard({ user, onSignOut }) {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         user={user}
+        initialTab={settingsTab}
+      />
+
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
       />
     </div>
   );
