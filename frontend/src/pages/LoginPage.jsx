@@ -22,7 +22,7 @@ export default function LoginPage({ onLoginSuccess }) {
       localStorage.setItem('evibite_auth_token', res.token);
       localStorage.setItem('evibite_user', JSON.stringify(res.user));
       if (onLoginSuccess) onLoginSuccess(res.user);
-      navigate('/');
+      navigate('/chat');
     } catch (err) {
       setError(err.message || 'Invalid email or password. Please try again.');
     } finally {

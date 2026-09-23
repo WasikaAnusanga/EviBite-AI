@@ -4,11 +4,12 @@ import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import SettingsModal from './components/SettingsModal';
+import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft } from 'lucide-react';
 
 function ChatDashboard({ user, onSignOut }) {
   const [sessions, setSessions] = useState([]);
@@ -223,7 +224,14 @@ function ChatDashboard({ user, onSignOut }) {
 
       <main className="chat-stage">
         <header className="chat-header">
-          <div className="chat-title">
+          <div className="chat-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link 
+              to="/" 
+              className="btn-secondary"
+              style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+            >
+              <ArrowLeft size={14} /> Home
+            </Link>
             <img src={logoImg} alt="EviBite AI" className="header-logo-img" />
             <h1>{activeSession?.title || 'Chat'}</h1>
             <span className="tag-badge">Multi-Agent Intelligence</span>
@@ -389,6 +397,10 @@ export default function App() {
       <Routes>
         <Route
           path="/"
+          element={<LandingPage user={user} />}
+        />
+        <Route
+          path="/chat"
           element={
             <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
               <ChatDashboard user={user} onSignOut={handleSignOut} />
