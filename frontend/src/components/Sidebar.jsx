@@ -44,10 +44,10 @@ export default function Sidebar({
     <aside className="sidebar">
       {/* Top Header & Brand */}
       <div className="sidebar-header">
-        <div className="brand-logo">
+        <Link to="/" className="brand-logo" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <img src={logoImg} alt="EviBite AI Logo" className="sidebar-logo-img" />
           <span>EviBite AI</span>
-        </div>
+        </Link>
       </div>
 
       {/* New Chat Button */}

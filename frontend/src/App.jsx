@@ -9,7 +9,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown } from 'lucide-react';
 
 function ChatDashboard({ user, onSignOut }) {
   const [sessions, setSessions] = useState([]);
@@ -397,7 +397,7 @@ export default function App() {
       <Routes>
         <Route
           path="/"
-          element={<LandingPage user={user} />}
+          element={<LandingPage user={user} onSignOut={handleSignOut} />}
         />
         <Route
           path="/chat"
