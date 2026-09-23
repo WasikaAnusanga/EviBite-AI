@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
@@ -20,14 +20,38 @@ import {
   Bot,
   Activity,
   Menu,
-  X
+  X,
+  User,
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 
-export default function LandingPage({ user, onLaunchApp }) {
+export default function LandingPage({ user, onSignOut }) {
   const [activeTab, setActiveTab] = useState('allergen');
   const [openFaq, setOpenFaq] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   const handleSignInClick = () => {
     if (user) {
@@ -134,7 +158,7 @@ export default function LandingPage({ user, onLaunchApp }) {
       {/* HEADER NAVBAR */}
       <header className="landing-nav">
         <div className="landing-nav-container">
-          <div className="landing-brand">
+          <div className="landing-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ cursor: 'pointer' }}>
             <div className="brand-icon">
               <Sparkles size={18} color="#10b981" />
             </div>
@@ -151,12 +175,71 @@ export default function LandingPage({ user, onLaunchApp }) {
           </nav>
 
           <div className="nav-actions desktop-only">
-            <button className="btn-secondary" onClick={handleSignInClick}>
-              Sign In
-            </button>
-            <button className="btn-primary" onClick={handleTryClick}>
-              {user ? 'Go to Chatbot' : 'Try Free'} <ArrowRight size={16} />
-            </button>
+            {user ? (
+              <>
+                <button className="btn-primary" onClick={handleTryClick}>
+                  Go to Chatbot <ArrowRight size={16} />
+                </button>
+
+                <div className="user-profile-dropdown-wrapper" ref={profileRef}>
+                  <button
+                    className={`user-nav-profile-btn ${profileDropdownOpen ? 'active' : ''}`}
+                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                    aria-label="User Profile Menu"
+                  >
+                    <div className="user-nav-avatar">
+                      {getInitials(user.name || user.email)}
+                    </div>
+                    <span className="user-nav-name">{user.name || user.email}</span>
+                    <ChevronDown size={14} className={`dropdown-chevron ${profileDropdownOpen ? 'open' : ''}`} />
+                  </button>
+
+                  {profileDropdownOpen && (
+                    <div className="user-profile-dropdown-menu">
+                      <div className="dropdown-user-header">
+                        <div className="dropdown-avatar-large">
+                          {getInitials(user.name || user.email)}
+                        </div>
+                        <div className="dropdown-user-details">
+                          <span className="dropdown-user-name">{user.name || 'User'}</span>
+                          <span className="dropdown-user-email">{user.email}</span>
+                        </div>
+                      </div>
+                      <div className="dropdown-divider" />
+                      <button
+                        className="dropdown-menu-item"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          navigate('/chat');
+                        }}
+                      >
+                        <MessageSquare size={16} />
+                        <span>Go to Chatbot</span>
+                      </button>
+                      <button
+                        className="dropdown-menu-item logout-item"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          if (onSignOut) onSignOut();
+                        }}
+                      >
+                        <LogOut size={16} />
+                        <span>Log out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <button className="btn-secondary" onClick={handleSignInClick}>
+                  Sign In
+                </button>
+                <button className="btn-primary" onClick={handleTryClick}>
+                  Try Free <ArrowRight size={16} />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -177,9 +260,34 @@ export default function LandingPage({ user, onLaunchApp }) {
             <a href="#demo" onClick={() => setMobileMenuOpen(false)}>Live Demo</a>
             <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
             <div className="mobile-actions">
-              <button className="btn-primary full-width" onClick={handleTryClick}>
-                {user ? 'Go to Chatbot' : 'Try Free'} <ArrowRight size={16} />
-              </button>
+              {user ? (
+                <>
+                  <div className="mobile-user-info">
+                    <div className="user-nav-avatar">
+                      {getInitials(user.name || user.email)}
+                    </div>
+                    <div className="mobile-user-details">
+                      <span className="mobile-user-name">{user.name || user.email}</span>
+                      <span className="mobile-user-email">{user.email}</span>
+                    </div>
+                  </div>
+                  <button className="btn-primary full-width" onClick={() => { setMobileMenuOpen(false); handleTryClick(); }}>
+                    Go to Chatbot <ArrowRight size={16} />
+                  </button>
+                  <button className="btn-secondary full-width logout-btn" onClick={() => { setMobileMenuOpen(false); if (onSignOut) onSignOut(); }}>
+                    <LogOut size={16} /> Log out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-secondary full-width" onClick={() => { setMobileMenuOpen(false); handleSignInClick(); }}>
+                    Sign In
+                  </button>
+                  <button className="btn-primary full-width" onClick={() => { setMobileMenuOpen(false); handleTryClick(); }}>
+                    Try Free <ArrowRight size={16} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
