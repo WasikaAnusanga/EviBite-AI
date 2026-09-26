@@ -81,17 +81,17 @@ CRITICAL INTENT STRINGS (YOU MUST USE ONLY THESE EXACT STRINGS FOR primary_inten
 
 Rules:
 1. Multi-intent queries: If the user asks about an allergy AND nutrition (e.g. "I have a peanut allergy. Can I eat Nutella and how much sugar does it have?"), set primary_intent to "allergen_query" and secondary_intents to ["nutrition_query"].
-2. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{"name": "Nutella"}].
+2. Products array: Must be a list of objects with "name", "brand", or "barcode", e.g. [{{"name": "Nutella"}}].
 3. Allergens: List canonical allergen names (e.g. ["peanut"]).
 4. Nutrients: List canonical nutrient names (e.g. ["sugars"]).
-5. Single product or brand names: If the user enters a single product or brand name (e.g. "coca cola", "oreo", "nutella", "cheerios"), set primary_intent to "product_search" and products to [{"name": "coca cola"}].
+5. Single product or brand names: If the user enters a single product or brand name (e.g. "coca cola", "oreo", "nutella", "cheerios"), set primary_intent to "product_search" and products to [{{"name": "coca cola"}}].
 6. Conversational / Gratitude queries: If the user enters a greeting, gratitude, or conversational closing (e.g. "hi", "hello", "thanks", "okay thanks", "thank you", "got it", "cool"), set primary_intent to "unknown" and products to [].
 
 Expected JSON format:
 {{
   "primary_intent": "allergen_query",
   "secondary_intents": ["nutrition_query"],
-  "products": [{"name": "Nutella"}],
+  "products": [{{"name": "Nutella"}}],
   "category": null,
   "allergens": ["peanut"],
   "dietary_requirements": [],

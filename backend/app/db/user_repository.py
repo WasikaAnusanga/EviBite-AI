@@ -35,6 +35,8 @@ class UserRepository:
     def _connect_db(self):
         """Initialize MongoDB client with SSL fallback options."""
         try:
+            from backend.app.db.product_repository import _configure_dns_resolver
+            _configure_dns_resolver()
             import pymongo
             import certifi
 

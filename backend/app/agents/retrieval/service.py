@@ -31,7 +31,7 @@ def set_retrieval_source(source: ProductSource) -> None:
     _default_source = source
 
 
-from backend.app.db.food_database import search_local_database
+from backend.app.db.product_repository import product_repo
 
 
 def retrieval_service(
@@ -47,24 +47,27 @@ def retrieval_service(
 
     candidates: list[EvidenceObject] = []
 
-    # Strategy 0: Search Curated Local Food Database
+    # Strategy 0: Search Cloud Product Database (MongoDB Atlas)
     allergen_keywords = ["milk", "dairy", "lactose", "peanut", "peanuts", "egg", "eggs", "soy", "soya", "gluten", "wheat", "nuts", "hazelnut", "oats", "almond"]
     found_allergens = [a for a in allergen_keywords if a in request.query.lower()]
 
-    local_matches = search_local_database(
+    cloud_matches = product_repo.search(
         query=request.query,
         category=request.category,
         allergens=found_allergens,
         limit=10,
     )
-    candidates.extend(local_matches)
+    candidates.extend(cloud_matches)
 
-
-    # Strategy A: Exact Barcode Lookup
+    # Strategy A: Barcode Lookup (Cloud DB first, then Open Food Facts API)
     if barcode:
-        ev = active_source.get_by_barcode(barcode)
+        ev = product_repo.get_by_barcode(barcode)
+        if not ev:
+            ev = active_source.get_by_barcode(barcode)
+            if ev:
+                product_repo.save_product(ev)
         if ev:
-            candidates.append(ev)
+            candidates.insert(0, ev)
 
     # Strategy B: Named Products Search
     if request.products:
@@ -72,21 +75,36 @@ def retrieval_service(
             name = p.get("name")
             p_code = p.get("barcode")
             if p_code:
-                ev = active_source.get_by_barcode(p_code)
+                ev = product_repo.get_by_barcode(p_code) or active_source.get_by_barcode(p_code)
                 if ev:
-                    candidates.append(ev)
+                    product_repo.save_product(ev)
+                    candidates.insert(0, ev)
                     continue
 
             if name and len(name.strip()) > 1:
                 results = active_source.search(query=name, category=request.category, limit=5)
+                for r in results:
+                    product_repo.save_product(r)
                 candidates.extend(results)
 
     # Strategy C: General / Category Search from Open Food Facts API
-    if (normalized_query or request.category) and len(candidates) < 3:
+    # Verify if cloud database candidates actually contain the query's primary keywords
+    query_distinct_words = [
+        w for w in normalized_query.split()
+        if len(w) > 2 and w not in {"with", "and", "for", "the", "food", "supermarket", "item", "items"}
+    ]
+    has_keyword_match = any(
+        any(w in c.name.lower() or (c.brand and w in c.brand.lower()) for w in query_distinct_words)
+        for c in candidates
+    ) if query_distinct_words else bool(candidates)
+
+    if (normalized_query or request.category) and (len(candidates) < 3 or not has_keyword_match):
         clean_search = _reformulate_query(normalized_query)
         api_results = active_source.search(
             query=clean_search, category=request.category, limit=10
         )
+        for r in api_results:
+            product_repo.save_product(r)
         candidates.extend(api_results)
 
     # Strategy D: Fallback fixtures if candidates empty
@@ -144,39 +162,94 @@ def _rank_and_score_candidates(
     candidates: list[EvidenceObject],
     request: RetrievalRequest,
 ) -> list[EvidenceObject]:
-    """Score and rank candidates based on textual relevance + field completeness."""
-    query_words = set(_normalize_text(request.query).split())
-    if request.category:
-        query_words.add(request.category.lower())
+    """IR Multi-Factor Ranking Engine (BM25F-inspired multi-field scoring + phrase boost + data quality)."""
+    if not candidates:
+        return []
+
+    query_norm = _normalize_text(request.query)
+    query_tokens = [w for w in query_norm.split() if len(w) > 1]
+    category_norm = (request.category or "").lower().strip()
+    
+    # Check if query requests minimizing or maximizing nutrients (e.g. low sugar)
+    minimize_sugar = any(w in query_norm for w in ["low sugar", "less sugar", "zero sugar", "no sugar"])
+    maximize_protein = any(w in query_norm for w in ["high protein", "rich in protein", "more protein"])
 
     for ev in candidates:
-        # Re-evaluate completeness based on request's requested_fields
-        field_score = _calculate_query_completeness(ev, request.requested_fields)
-        ev.completeness = round((ev.completeness + field_score) / 2.0, 2)
+        name_norm = _normalize_text(ev.name)
+        brand_norm = _normalize_text(ev.brand or "")
+        cat_norm = " ".join(ev.categories).lower()
+        ing_norm = (ev.ingredients_text or "").lower()
 
-        # Text relevance score
-        name_words = set(_normalize_text(ev.name).split())
-        brand_words = set(_normalize_text(ev.brand or "").split())
-        cat_words = set(" ".join(ev.categories).lower().split())
+        # 1. Exact Barcode Match Override (Maximum relevance)
+        if request.query.strip().isdigit() and ev.barcode and request.query.strip() in ev.barcode:
+            setattr(ev, "_rank_score", 10.0)
+            continue
 
-        matches = len(query_words.intersection(name_words.union(brand_words).union(cat_words)))
-        relevance_score = matches / max(len(query_words), 1)
+        # 2. Multi-Field Term Match Scoring (BM25F-inspired weights)
+        field_score = 0.0
+        max_possible_field_score = max(len(query_tokens), 1) * 4.0  # Max if all tokens in Name
+        
+        for token in query_tokens:
+            token_score = 0.0
+            if token in name_norm:
+                token_score = max(token_score, 4.0)  # Name field weight: 4.0
+            elif token in brand_norm:
+                token_score = max(token_score, 3.0)  # Brand field weight: 3.0
+            elif token in cat_norm:
+                token_score = max(token_score, 2.0)  # Category field weight: 2.0
+            elif token in ing_norm:
+                token_score = max(token_score, 1.0)  # Ingredients field weight: 1.0
+            field_score += token_score
 
-        # Final weighted score
-        final_rank_score = (relevance_score * 0.5) + (ev.completeness * 0.5)
-        # Store temporary attribute for sorting
-        setattr(ev, "_rank_score", final_rank_score)
+        normalized_field_score = min(field_score / max_possible_field_score, 1.0)
 
-    # Deduplicate candidates by product_id or barcode
+        # 3. Exact Phrase Proximity Boost (N-Gram / Substring match)
+        phrase_boost = 0.0
+        if len(query_tokens) > 1 and query_norm in name_norm:
+            phrase_boost = 1.0  # Full query string appears intact in product name
+        elif query_tokens and all(t in name_norm for t in query_tokens):
+            phrase_boost = 0.6  # All tokens in name
+
+        # 4. Category Alignment Boost
+        cat_boost = 0.0
+        if category_norm and any(category_norm in c for c in ev.categories):
+            cat_boost = 0.5
+
+        # 5. Data Quality & Completeness Score (0.0 to 1.0)
+        quality_score = _calculate_query_completeness(ev, request.requested_fields)
+
+        # 6. Intent & Nutritional Alignment Score
+        intent_score = 0.0
+        if minimize_sugar and ev.nutrition:
+            sugar = ev.nutrition.get("sugars_g_100g")
+            if sugar is not None:
+                intent_score = 1.0 if sugar <= 5.0 else max(0.0, 1.0 - (sugar / 50.0))
+        elif maximize_protein and ev.nutrition:
+            protein = ev.nutrition.get("protein_g_100g")
+            if protein is not None:
+                intent_score = min(protein / 20.0, 1.0)
+
+        # Composite IR Score Equation
+        # Weights: Field match (0.45) + Phrase boost (0.25) + Quality (0.15) + Intent/Cat (0.15)
+        composite_score = (
+            (normalized_field_score * 0.45)
+            + (phrase_boost * 0.25)
+            + (quality_score * 0.15)
+            + ((cat_boost + intent_score) / 2.0 * 0.15)
+        )
+
+        setattr(ev, "_rank_score", round(composite_score, 4))
+
+    # Deduplicate candidates by barcode or product_id
     unique_candidates: list[EvidenceObject] = []
-    seen_ids = set()
+    seen_keys = set()
     for ev in candidates:
         key = ev.barcode or ev.product_id or ev.name.lower()
-        if key not in seen_ids:
-            seen_ids.add(key)
+        if key not in seen_keys:
+            seen_keys.add(key)
             unique_candidates.append(ev)
 
-    # Sort descending by _rank_score
+    # Sort descending by composite IR rank score
     unique_candidates.sort(key=lambda x: getattr(x, "_rank_score", 0.0), reverse=True)
 
     # Clean temporary attribute before returning
@@ -184,7 +257,7 @@ def _rank_and_score_candidates(
         if hasattr(ev, "_rank_score"):
             delattr(ev, "_rank_score")
 
-    return unique_candidates[:10]  # Top-K = 10
+    return unique_candidates[:10]
 
 
 def _calculate_query_completeness(ev: EvidenceObject, requested_fields: list[str]) -> float:
