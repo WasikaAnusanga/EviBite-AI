@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 from backend.app.agents.agent_stubs import EvidenceObject
-from backend.app.db.food_database import FOOD_DATABASE, search_local_database
 
 load_dotenv()
 
@@ -34,7 +33,7 @@ def _configure_dns_resolver():
 
 
 class ProductRepository:
-    """Cloud Product Repository backed by MongoDB Atlas with in-memory fallback."""
+    """Cloud Product Repository backed exclusively by MongoDB Atlas."""
 
     def __init__(self):
         self.db = None
@@ -89,10 +88,7 @@ class ProductRepository:
             logger.info("Successfully connected to MongoDB Atlas for Product Database!")
         except Exception as e:
             self._is_connected = False
-            logger.warning(
-                f"MongoDB Product database connection notice: {e}. "
-                "Operating with in-memory food database fallback."
-            )
+            logger.warning(f"MongoDB Product database connection notice: {e}.")
 
     @property
     def is_connected(self) -> bool:
@@ -112,10 +108,6 @@ class ProductRepository:
             except Exception as e:
                 logger.warning(f"MongoDB barcode query failed: {e}")
 
-        # Fallback to local in-memory database
-        for item in FOOD_DATABASE:
-            if item.barcode == clean_code:
-                return item
         return None
 
     def search(
@@ -127,9 +119,9 @@ class ProductRepository:
         limit: int = 10,
     ) -> List[EvidenceObject]:
         """Search products in MongoDB using regex / text match + category & allergen filters."""
+        results: List[EvidenceObject] = []
         if self._is_connected and self.collection is not None:
             try:
-                results: List[EvidenceObject] = []
                 query_filter: Dict[str, Any] = {}
 
                 # Category filter
@@ -141,7 +133,6 @@ class ProductRepository:
                 if query_str:
                     words = [w for w in query_str.lower().split() if len(w) > 2]
                     if words:
-                        # Regex match in name or brand
                         regex_pattern = "|".join(re.escape(w) for w in words)
                         query_filter["$or"] = [
                             {"name": {"$regex": regex_pattern, "$options": "i"}},
@@ -153,23 +144,13 @@ class ProductRepository:
                 cursor = self.collection.find(query_filter).limit(limit)
                 for doc in cursor:
                     results.append(self._doc_to_evidence(doc))
-
-                if results:
-                    return results
             except Exception as e:
-                logger.warning(f"MongoDB search failed: {e}. Falling back to in-memory database.")
+                logger.warning(f"MongoDB search failed: {e}.")
 
-        # Fallback to curated in-memory search
-        return search_local_database(
-            query=query,
-            category=category,
-            allergens=allergens,
-            dietary=dietary,
-            limit=limit,
-        )
+        return results
 
     def save_product(self, product: EvidenceObject) -> bool:
-        """Upsert a product into MongoDB Atlas (from local seed or Open Food Facts)."""
+        """Upsert a product into MongoDB Atlas (from Open Food Facts or manual addition)."""
         if not self._is_connected or self.collection is None:
             return False
 
@@ -185,21 +166,6 @@ class ProductRepository:
             logger.warning(f"Failed to upsert product '{product.name}' into MongoDB: {e}")
             return False
 
-    def seed_from_local_database(self) -> int:
-        """Seed all curated items from in-memory FOOD_DATABASE into MongoDB Atlas."""
-        if not self._is_connected or self.collection is None:
-            logger.warning("Cannot seed: MongoDB not connected.")
-            return 0
-
-        inserted_or_updated = 0
-        for item in FOOD_DATABASE:
-            success = self.save_product(item)
-            if success:
-                inserted_or_updated += 1
-
-        logger.info(f"Successfully seeded {inserted_or_updated} products into MongoDB Atlas.")
-        return inserted_or_updated
-
     def get_total_count(self) -> int:
         """Return total number of products stored in MongoDB."""
         if self._is_connected and self.collection is not None:
@@ -207,7 +173,7 @@ class ProductRepository:
                 return self.collection.count_documents({})
             except Exception:
                 return 0
-        return len(FOOD_DATABASE)
+        return 0
 
     @staticmethod
     def _doc_to_evidence(doc: Dict[str, Any]) -> EvidenceObject:
