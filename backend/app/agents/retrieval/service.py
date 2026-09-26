@@ -31,7 +31,7 @@ def set_retrieval_source(source: ProductSource) -> None:
     _default_source = source
 
 
-from backend.app.db.food_database import search_local_database
+from backend.app.db.product_repository import product_repo
 
 
 def retrieval_service(
@@ -47,24 +47,27 @@ def retrieval_service(
 
     candidates: list[EvidenceObject] = []
 
-    # Strategy 0: Search Curated Local Food Database
+    # Strategy 0: Search Cloud Product Database (MongoDB Atlas)
     allergen_keywords = ["milk", "dairy", "lactose", "peanut", "peanuts", "egg", "eggs", "soy", "soya", "gluten", "wheat", "nuts", "hazelnut", "oats", "almond"]
     found_allergens = [a for a in allergen_keywords if a in request.query.lower()]
 
-    local_matches = search_local_database(
+    cloud_matches = product_repo.search(
         query=request.query,
         category=request.category,
         allergens=found_allergens,
         limit=10,
     )
-    candidates.extend(local_matches)
+    candidates.extend(cloud_matches)
 
-
-    # Strategy A: Exact Barcode Lookup
+    # Strategy A: Barcode Lookup (Cloud DB first, then Open Food Facts API)
     if barcode:
-        ev = active_source.get_by_barcode(barcode)
+        ev = product_repo.get_by_barcode(barcode)
+        if not ev:
+            ev = active_source.get_by_barcode(barcode)
+            if ev:
+                product_repo.save_product(ev)
         if ev:
-            candidates.append(ev)
+            candidates.insert(0, ev)
 
     # Strategy B: Named Products Search
     if request.products:
@@ -72,13 +75,16 @@ def retrieval_service(
             name = p.get("name")
             p_code = p.get("barcode")
             if p_code:
-                ev = active_source.get_by_barcode(p_code)
+                ev = product_repo.get_by_barcode(p_code) or active_source.get_by_barcode(p_code)
                 if ev:
-                    candidates.append(ev)
+                    product_repo.save_product(ev)
+                    candidates.insert(0, ev)
                     continue
 
             if name and len(name.strip()) > 1:
                 results = active_source.search(query=name, category=request.category, limit=5)
+                for r in results:
+                    product_repo.save_product(r)
                 candidates.extend(results)
 
     # Strategy C: General / Category Search from Open Food Facts API
@@ -87,6 +93,8 @@ def retrieval_service(
         api_results = active_source.search(
             query=clean_search, category=request.category, limit=10
         )
+        for r in api_results:
+            product_repo.save_product(r)
         candidates.extend(api_results)
 
     # Strategy D: Fallback fixtures if candidates empty
