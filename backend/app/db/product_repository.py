@@ -22,12 +22,33 @@ MONGODB_URI = os.getenv("MONGODB_URI") or "mongodb+srv://wasikaanusanga12_db_use
 
 
 def _configure_dns_resolver():
-    """Ensure dnspython can resolve MongoDB SRV records on Windows environments."""
+    """Ensure dnspython and socket can resolve MongoDB SRV & A records on Windows environments."""
     try:
         import dns.resolver
+        import socket
+
         resolver = dns.resolver.Resolver()
         resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
         dns.resolver.default_resolver = resolver
+
+        # Fallback patch for socket.getaddrinfo if local Windows DNS fails on replica hostnames
+        if not getattr(socket, "_evibite_dns_patched", False):
+            _orig_getaddrinfo = socket.getaddrinfo
+
+            def _custom_getaddrinfo(host, port, *args, **kwargs):
+                try:
+                    return _orig_getaddrinfo(host, port, *args, **kwargs)
+                except socket.gaierror:
+                    try:
+                        answers = resolver.resolve(host, "A")
+                        if answers:
+                            return _orig_getaddrinfo(answers[0].address, port, *args, **kwargs)
+                    except Exception:
+                        pass
+                    raise
+
+            socket.getaddrinfo = _custom_getaddrinfo
+            socket._evibite_dns_patched = True
     except Exception as e:
         logger.debug(f"Custom DNS resolver setup skipped: {e}")
 
