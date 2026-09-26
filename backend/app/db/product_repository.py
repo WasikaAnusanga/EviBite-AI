@@ -111,9 +111,15 @@ class ProductRepository:
             self._is_connected = False
             logger.warning(f"MongoDB Product database connection notice: {e}.")
 
+    def _ensure_connected(self) -> bool:
+        """Attempt reconnection if client was disconnected."""
+        if not self._is_connected or self.collection is None:
+            self._connect_db()
+        return self._is_connected
+
     @property
     def is_connected(self) -> bool:
-        return self._is_connected
+        return self._ensure_connected()
 
     def get_by_barcode(self, barcode: str) -> Optional[EvidenceObject]:
         """Look up a product in MongoDB by exact barcode."""
@@ -121,7 +127,7 @@ class ProductRepository:
         if not clean_code:
             return None
 
-        if self._is_connected and self.collection is not None:
+        if self._ensure_connected() and self.collection is not None:
             try:
                 doc = self.collection.find_one({"barcode": clean_code})
                 if doc:
@@ -141,7 +147,7 @@ class ProductRepository:
     ) -> List[EvidenceObject]:
         """Search products in MongoDB using regex / text match + category & allergen filters."""
         results: List[EvidenceObject] = []
-        if self._is_connected and self.collection is not None:
+        if self._ensure_connected() and self.collection is not None:
             try:
                 query_filter: Dict[str, Any] = {}
 
@@ -172,7 +178,7 @@ class ProductRepository:
 
     def save_product(self, product: EvidenceObject) -> bool:
         """Upsert a product into MongoDB Atlas (from Open Food Facts or manual addition)."""
-        if not self._is_connected or self.collection is None:
+        if not self._ensure_connected() or self.collection is None:
             return False
 
         try:
@@ -189,7 +195,7 @@ class ProductRepository:
 
     def get_total_count(self) -> int:
         """Return total number of products stored in MongoDB."""
-        if self._is_connected and self.collection is not None:
+        if self._ensure_connected() and self.collection is not None:
             try:
                 return self.collection.count_documents({})
             except Exception:
