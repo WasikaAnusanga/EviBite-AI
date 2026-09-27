@@ -136,3 +136,30 @@ export async function getCurrentUser(token) {
   }
   return await response.json();
 }
+
+/**
+ * Generate personalized diet & nutrition plan via intelligent agent
+ * @param {Object} profile
+ * @returns {Promise<Object>}
+ */
+export async function generateDietPlan(profile) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/diet-plan/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profile),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Server error (${response.status})`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Diet plan generation failed:', error);
+    throw error;
+  }
+}

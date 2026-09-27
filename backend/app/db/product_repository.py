@@ -158,14 +158,17 @@ class ProductRepository:
                 # Query text search (case-insensitive regex for high recall)
                 query_str = query.strip()
                 if query_str:
-                    words = [w for w in query_str.lower().split() if len(w) > 2]
+                    common_stopwords = {"water", "spring", "with", "and", "for", "the", "fresh", "sweet", "pure", "natural", "organic", "chunks", "canned", "free", "original", "style", "pack"}
+                    words = [w for w in re.findall(r'[a-zA-Z]{3,}', query_str.lower()) if w not in common_stopwords]
+                    if not words:
+                        words = re.findall(r'[a-zA-Z]{3,}', query_str.lower())
+
                     if words:
                         regex_pattern = "|".join(re.escape(w) for w in words)
                         query_filter["$or"] = [
                             {"name": {"$regex": regex_pattern, "$options": "i"}},
-                            {"brand": {"$regex": regex_pattern, "$options": "i"}},
                             {"categories": {"$regex": regex_pattern, "$options": "i"}},
-                            {"ingredients_text": {"$regex": regex_pattern, "$options": "i"}},
+                            {"brand": {"$regex": regex_pattern, "$options": "i"}},
                         ]
 
                 cursor = self.collection.find(query_filter).limit(limit)

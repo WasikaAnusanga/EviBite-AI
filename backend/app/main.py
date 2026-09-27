@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.chat import router as chat_router
+from backend.app.api.routes.diet_plan import router as diet_plan_router
 from backend.app.api.routes.triage import router as triage_router
 from backend.app.security.rate_limiter import rate_limiter
 
@@ -39,6 +40,7 @@ async def rate_limit_middleware(request: Request, call_next):
 app.include_router(auth_router)
 app.include_router(triage_router)
 app.include_router(chat_router)
+app.include_router(diet_plan_router)
 
 
 @app.get("/health")

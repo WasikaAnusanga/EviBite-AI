@@ -22,7 +22,7 @@ USER_AGENT = "EviBiteAI - WebAnalyticsAssignment - Version 1.0 (contact: student
 class OpenFoodFactsSource(ProductSource):
     """ProductSource implementation targeting Open Food Facts public API."""
 
-    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 2.0):
+    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 6.0):
         self.cache_ttl = cache_ttl_seconds
         self.timeout = timeout_seconds
         self._cache: dict[str, tuple[float, Any]] = {}

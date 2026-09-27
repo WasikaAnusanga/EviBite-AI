@@ -8,6 +8,7 @@ import HelpModal from './components/HelpModal';
 import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import DietPlannerPage from './pages/DietPlannerPage';
 import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
 import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown } from 'lucide-react';
@@ -427,6 +428,10 @@ export default function App() {
         <Route
           path="/register"
           element={<RegisterPage onRegisterSuccess={(userData) => setUser(userData)} />}
+        />
+        <Route
+          path="/diet-plan"
+          element={<DietPlannerPage user={user} onSignOut={handleSignOut} />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
