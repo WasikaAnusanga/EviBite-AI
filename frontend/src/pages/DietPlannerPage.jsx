@@ -85,6 +85,8 @@ export default function DietPlannerPage({ user, onSignOut }) {
   const [isSavedPlansOpen, setIsSavedPlansOpen] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [planToDelete, setPlanToDelete] = useState(null);
+  const [isDeletingPlan, setIsDeletingPlan] = useState(false);
 
   const userId = user ? (user.id || user.email) : null;
 
@@ -98,6 +100,21 @@ export default function DietPlannerPage({ user, onSignOut }) {
     }
     loadSavedPlans();
   }, [userId]);
+
+  // Handle ESC key to dismiss modals cleanly
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (planToDelete && !isDeletingPlan) {
+          setPlanToDelete(null);
+        } else if (isSavedPlansOpen) {
+          setIsSavedPlansOpen(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [planToDelete, isDeletingPlan, isSavedPlansOpen]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -249,17 +266,33 @@ export default function DietPlannerPage({ user, onSignOut }) {
     }
   };
 
-  const handleDeleteSavedPlan = async (planId, e) => {
-    if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this saved diet plan?')) return;
+  const handlePromptDeletePlan = (plan, e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setPlanToDelete(plan);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!planToDelete) return;
+    setIsDeletingPlan(true);
     try {
-      const success = await deleteUserDietPlan(planId, userId);
+      const success = await deleteUserDietPlan(planToDelete.id, userId);
       if (success) {
-        setSavedPlans(prev => prev.filter(p => p.id !== planId));
+        setSavedPlans(prev => prev.filter(p => p.id !== planToDelete.id));
+        setPlanToDelete(null);
       }
     } catch (err) {
       console.error('Delete plan failed:', err);
+    } finally {
+      setIsDeletingPlan(false);
     }
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeletingPlan) return;
+    setPlanToDelete(null);
   };
 
   const handleSelectSavedPlan = (plan) => {
@@ -454,9 +487,10 @@ export default function DietPlannerPage({ user, onSignOut }) {
                             <h4 className="plan-card-title">{plan.title || `${plan.user_goal} Plan`}</h4>
                           </div>
                           <button
+                            type="button"
                             className="plan-delete-btn"
                             title="Delete this saved plan"
-                            onClick={(e) => handleDeleteSavedPlan(plan.id, e)}
+                            onClick={(e) => handlePromptDeletePlan(plan, e)}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -494,6 +528,67 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Delete Confirmation Modal */}
+        {planToDelete && (
+          <div className="diet-confirm-overlay" onClick={handleCancelDelete}>
+            <div className="diet-confirm-modal animate-scale-up" onClick={(e) => e.stopPropagation()}>
+              <div className="diet-confirm-icon-box">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="diet-confirm-title">Delete Saved Diet Plan?</h3>
+              <p className="diet-confirm-desc">
+                Are you sure you want to delete this saved plan? This action cannot be undone and will permanently remove it from your account.
+              </p>
+
+              <div className="diet-confirm-plan-preview">
+                <div className="confirm-preview-badge">
+                  <Globe size={11} />
+                  <span>{planToDelete.user_country || planToDelete.profile?.country || 'Global'}</span>
+                </div>
+                <div className="confirm-preview-title">
+                  {planToDelete.title || `${planToDelete.user_goal} Plan`}
+                </div>
+                <div className="confirm-preview-meta">
+                  <span>{planToDelete.daily_targets?.daily_calories || 2000} kcal</span>
+                  <span className="dot">•</span>
+                  <span>{planToDelete.daily_targets?.protein_target || 120}g protein</span>
+                  <span className="dot">•</span>
+                  <span>{planToDelete.meals?.length || 3} meals</span>
+                </div>
+              </div>
+
+              <div className="diet-confirm-actions">
+                <button
+                  type="button"
+                  onClick={handleCancelDelete}
+                  className="btn-confirm-cancel"
+                  disabled={isDeletingPlan}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="btn-confirm-delete"
+                  disabled={isDeletingPlan}
+                >
+                  {isDeletingPlan ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={16} />
+                      <span>Delete Plan</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
