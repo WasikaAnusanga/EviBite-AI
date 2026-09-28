@@ -18,6 +18,7 @@ class RetrievalRequest(BaseModel):
     intent: str
     products: list[dict[str, Any]] = Field(default_factory=list)
     category: str | None = None
+    country: str | None = None
     requested_fields: list[str] = Field(default_factory=list)
 
 
@@ -29,6 +30,7 @@ class EvidenceObject(BaseModel):
     categories: list[str] = Field(default_factory=list)
     ingredients_text: str | None = None
     allergens: list[str] = Field(default_factory=list)
+    countries: list[str] = Field(default_factory=list)
     nutrition: dict[str, Any] = Field(default_factory=dict)
     completeness: float = 1.0
     source: str = "open_food_facts"

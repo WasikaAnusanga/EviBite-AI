@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Sparkles, 
@@ -19,17 +19,28 @@ import {
   Clock, 
   Printer, 
   Copy, 
-  RotateCcw,
-  Check,
-  TrendingDown,
-  TrendingUp,
-  Dumbbell,
-  Shield,
-  Zap,
-  Info
+  RotateCcw, 
+  Check, 
+  TrendingDown, 
+  TrendingUp, 
+  Dumbbell, 
+  Shield, 
+  ShieldAlert, 
+  Globe, 
+  Zap, 
+  Info, 
+  Loader2, 
+  User, 
+  LogOut,
+  Bookmark,
+  BookmarkCheck,
+  Trash2,
+  Calendar,
+  X
 } from 'lucide-react';
-import { generateDietPlan } from '../services/api';
+import { generateDietPlan, saveUserDietPlan, fetchUserDietPlans, deleteUserDietPlan } from '../services/api';
 import logoImg from '../logo/logo.png';
+import ClinicalRationale from '../components/ClinicalRationale';
 
 export default function DietPlannerPage({ user, onSignOut }) {
   const navigate = useNavigate();
@@ -41,6 +52,27 @@ export default function DietPlannerPage({ user, onSignOut }) {
   const [error, setError] = useState(null);
   const [dietPlan, setDietPlan] = useState(null);
   const [copiedList, setCopiedList] = useState(false);
+  const [otherAllergyText, setOtherAllergyText] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Saved Plans State
+  const [savedPlans, setSavedPlans] = useState([]);
+  const [isSavedPlansOpen, setIsSavedPlansOpen] = useState(false);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+
+  const userId = user ? (user.id || user.email) : null;
+
+  // Load saved diet plans on mount or when user updates
+  useEffect(() => {
+    async function loadSavedPlans() {
+      if (userId) {
+        const plans = await fetchUserDietPlans(userId);
+        setSavedPlans(plans);
+      }
+    }
+    loadSavedPlans();
+  }, [userId]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -58,6 +90,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
     budget: 'medium',
     meal_frequency: '3_meals',
     cooking_preference: 'normal_cooking',
+    country: 'United States',
   });
 
   // Calculate live BMI
@@ -103,12 +136,29 @@ export default function DietPlannerPage({ user, onSignOut }) {
     setIsLoading(true);
     setError(null);
     setLoadingStep(1);
+    setElapsedSeconds(0);
 
     const stepInterval = setInterval(() => {
       setLoadingStep(prev => (prev < 4 ? prev + 1 : prev));
     }, 1800);
 
+    const timerInterval = setInterval(() => {
+      setElapsedSeconds(prev => prev + 1);
+    }, 1000);
+
     try {
+      // Process declared allergies: combine standard allergies with custom 'other' text
+      let activeAllergies = formData.allergies.filter(a => a !== 'other');
+      if (formData.allergies.includes('other') && otherAllergyText.trim()) {
+        const customItems = otherAllergyText
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+        activeAllergies = Array.from(new Set([...activeAllergies, ...customItems]));
+      } else if (formData.allergies.includes('other')) {
+        activeAllergies.push('other');
+      }
+
       const payload = {
         age: parseInt(formData.age, 10),
         gender: formData.gender,
@@ -117,24 +167,85 @@ export default function DietPlannerPage({ user, onSignOut }) {
         goal: formData.goal,
         activity: formData.activity,
         diet: formData.diet,
-        allergies: formData.allergies,
+        allergies: activeAllergies,
         health_conditions: formData.health_conditions,
         food_preferences: formData.food_preferences,
         foods_to_avoid: formData.foods_to_avoid,
         budget: formData.budget,
         meal_frequency: formData.meal_frequency,
         cooking_preference: formData.cooking_preference,
+        country: formData.country,
       };
 
       const result = await generateDietPlan(payload);
       clearInterval(stepInterval);
+      clearInterval(timerInterval);
+      result.profile = {
+        ...formData,
+        allergies: activeAllergies
+      };
       setDietPlan(result);
+
+      // Auto-save to user profile in MongoDB
+      if (userId) {
+        try {
+          const saveRes = await saveUserDietPlan(userId, result, result.profile);
+          if (saveRes?.plan) {
+            setSavedPlans(prev => [saveRes.plan, ...prev.filter(p => p.id !== saveRes.plan.id)]);
+            setSaveSuccessMsg('Saved to Profile ✓');
+          }
+        } catch (saveErr) {
+          console.error('Auto-save plan notice:', saveErr);
+        }
+      }
     } catch (err) {
-      clearInterval(stepInterval);
       setError(err.message || 'Failed to generate personalized diet plan. Please try again.');
     } finally {
+      clearInterval(stepInterval);
+      clearInterval(timerInterval);
       setIsLoading(false);
     }
+  };
+
+  const handleManualSave = async () => {
+    if (!dietPlan || !userId) return;
+    setIsSavingPlan(true);
+    try {
+      const res = await saveUserDietPlan(userId, dietPlan, dietPlan.profile || formData);
+      if (res?.plan) {
+        setSavedPlans(prev => [res.plan, ...prev.filter(p => p.id !== res.plan.id)]);
+        setSaveSuccessMsg('Saved to Profile ✓');
+        setTimeout(() => setSaveSuccessMsg(''), 3500);
+      }
+    } catch (err) {
+      console.error('Manual save failed:', err);
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
+  const handleDeleteSavedPlan = async (planId, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this saved diet plan?')) return;
+    try {
+      const success = await deleteUserDietPlan(planId, userId);
+      if (success) {
+        setSavedPlans(prev => prev.filter(p => p.id !== planId));
+      }
+    } catch (err) {
+      console.error('Delete plan failed:', err);
+    }
+  };
+
+  const handleSelectSavedPlan = (plan) => {
+    setDietPlan(plan);
+    if (plan.profile) {
+      setFormData(prev => ({
+        ...prev,
+        ...plan.profile,
+      }));
+    }
+    setIsSavedPlansOpen(false);
   };
 
   const handleCopyShoppingList = () => {
@@ -170,6 +281,16 @@ export default function DietPlannerPage({ user, onSignOut }) {
           </Link>
         </div>
         <div className="diet-header-right">
+          <button 
+            type="button"
+            onClick={() => setIsSavedPlansOpen(true)} 
+            className="diet-nav-btn secondary saved-plans-nav-btn"
+            title="View your saved diet plans"
+          >
+            <Bookmark size={15} className="text-emerald" />
+            <span>Saved Plans</span>
+            {savedPlans.length > 0 && <span className="nav-count-badge">{savedPlans.length}</span>}
+          </button>
           <Link to="/chat" className="diet-nav-btn secondary">
             <Utensils size={15} />
             <span>Chat Assistant</span>
@@ -183,10 +304,120 @@ export default function DietPlannerPage({ user, onSignOut }) {
               <span>New Plan</span>
             </button>
           )}
+          {user && (
+            <div className="diet-user-pill">
+              <div className="diet-user-avatar">
+                <User size={13} />
+              </div>
+              <span className="diet-user-name">{user.name || user.email?.split('@')[0]}</span>
+              {onSignOut && (
+                <button 
+                  onClick={onSignOut} 
+                  className="diet-logout-icon-btn" 
+                  title="Sign Out"
+                >
+                  <LogOut size={13} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
       <main className="diet-main-container">
+        {/* Saved Plans Modal */}
+        {isSavedPlansOpen && (
+          <div className="diet-modal-overlay" onClick={() => setIsSavedPlansOpen(false)}>
+            <div className="diet-saved-plans-modal animate-scale-up" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div className="modal-header-left">
+                  <div className="modal-header-icon">
+                    <Bookmark size={20} className="text-emerald" />
+                  </div>
+                  <div>
+                    <h3 className="modal-title">My Saved Diet Plans</h3>
+                    <p className="modal-subtitle">
+                      {savedPlans.length} {savedPlans.length === 1 ? 'plan' : 'plans'} saved for {user?.name || user?.email}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsSavedPlansOpen(false)} 
+                  className="modal-close-btn"
+                  aria-label="Close saved plans modal"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="modal-body-plans">
+                {savedPlans.length === 0 ? (
+                  <div className="saved-plans-empty">
+                    <Bookmark size={36} className="text-slate-300" />
+                    <h4>No Saved Diet Plans Yet</h4>
+                    <p>Generate a diet plan using the wizard, and it will be saved to your profile automatically.</p>
+                  </div>
+                ) : (
+                  <div className="saved-plans-grid">
+                    {savedPlans.map((plan) => (
+                      <div 
+                        key={plan.id} 
+                        className={`saved-plan-card ${dietPlan?.id === plan.id ? 'current-active' : ''}`}
+                        onClick={() => handleSelectSavedPlan(plan)}
+                      >
+                        <div className="saved-plan-card-header">
+                          <div className="plan-card-title-group">
+                            <span className="plan-country-pill">
+                              <Globe size={12} />
+                              {plan.user_country || plan.profile?.country || 'Global'}
+                            </span>
+                            <h4 className="plan-card-title">{plan.title || `${plan.user_goal} Plan`}</h4>
+                          </div>
+                          <button
+                            className="plan-delete-btn"
+                            title="Delete this saved plan"
+                            onClick={(e) => handleDeleteSavedPlan(plan.id, e)}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+
+                        <div className="saved-plan-metrics-row">
+                          <div className="metric-chip">
+                            <Flame size={12} className="text-orange" />
+                            <span>{plan.daily_targets?.daily_calories || 2000} kcal</span>
+                          </div>
+                          <div className="metric-chip">
+                            <Dumbbell size={12} className="text-blue" />
+                            <span>{plan.daily_targets?.protein_target || 120}g protein</span>
+                          </div>
+                          <div className="metric-chip">
+                            <Clock size={12} />
+                            <span>{plan.meals?.length || 3} meals</span>
+                          </div>
+                        </div>
+
+                        <div className="saved-plan-footer">
+                          <span className="saved-plan-date">
+                            <Calendar size={12} />
+                            {new Date(plan.created_at || plan.timestamp || Date.now()).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                          <span className="btn-load-plan-text">
+                            Load Plan &rarr;
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {/* Loading Overlay */}
         {isLoading && (
           <div className="diet-loading-overlay">
@@ -195,7 +426,9 @@ export default function DietPlannerPage({ user, onSignOut }) {
                 <Sparkles size={36} className="sparkle-pulse" />
               </div>
               <h2 className="loading-title">Diet & Nutrition Planning Agent</h2>
-              <p className="loading-subtitle">Synthesizing personalized supermarket diet plan</p>
+              <p className="loading-subtitle">
+                Synthesizing personalized {formData.country} supermarket diet plan
+              </p>
               
               <div className="loading-progress-stages">
                 {loadingSteps.map((step, idx) => (
@@ -204,11 +437,31 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     className={`loading-stage-item ${loadingStep === idx ? 'active' : loadingStep > idx ? 'done' : 'pending'}`}
                   >
                     <div className="stage-icon">
-                      {loadingStep > idx ? <CheckCircle2 size={16} className="text-emerald" /> : <div className="stage-dot" />}
+                      {loadingStep > idx ? (
+                        <CheckCircle2 size={16} className="text-emerald" />
+                      ) : loadingStep === idx ? (
+                        <Loader2 size={16} className="loading-spin-icon text-emerald" />
+                      ) : (
+                        <div className="stage-dot" />
+                      )}
                     </div>
                     <span>{step}</span>
                   </div>
                 ))}
+              </div>
+
+              <div className="loading-active-indicator">
+                <div className="loading-bar-track">
+                  <div 
+                    className="loading-bar-fill" 
+                    style={{ width: `${Math.min(96, Math.max(12, (loadingStep + 1) * 18 + elapsedSeconds * 3))}%` }} 
+                  />
+                </div>
+                <p className="loading-status-tip">
+                  {loadingStep === 4 
+                    ? `Generating clinical rationale via Gemini AI... (${elapsedSeconds}s)` 
+                    : `Grounding verified ${formData.country} supermarket items... (${elapsedSeconds}s)`}
+                </p>
               </div>
             </div>
           </div>
@@ -228,6 +481,31 @@ export default function DietPlannerPage({ user, onSignOut }) {
         {/* ============================================================== */}
         {dietPlan && !isLoading && (
           <div className="diet-result-view animate-fade-in">
+            {/* Official Print Header (Only visible on Printed Sheet) */}
+            <div className="print-doc-header">
+              <div className="print-brand-left">
+                <img src={logoImg} alt="EviBite AI" className="print-logo" />
+                <div>
+                  <h2 className="print-brand-title">EviBite AI Diet & Nutrition Planning Agent</h2>
+                  <span className="print-brand-subtitle">Clinical Dietary Strategy & Grounded Supermarket Blueprint</span>
+                </div>
+              </div>
+              <div className="print-meta-right">
+                <div className="print-meta-item">
+                  <span className="print-meta-label">Market:</span>
+                  <span className="print-meta-val">{dietPlan.user_country || formData.country}</span>
+                </div>
+                <div className="print-meta-item">
+                  <span className="print-meta-label">Plan Status:</span>
+                  <span className="print-meta-val">Verified Safe</span>
+                </div>
+                <div className="print-meta-item">
+                  <span className="print-meta-label">Generated:</span>
+                  <span className="print-meta-val">{new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Hero Summary Card */}
             <div className="result-hero-banner">
               <div className="result-hero-content">
@@ -241,6 +519,10 @@ export default function DietPlannerPage({ user, onSignOut }) {
                   All items verified against live supermarket inventory.
                 </p>
                 <div className="result-meta-tags">
+                  <span className="meta-tag">
+                    <Globe size={13} className="text-emerald" />
+                    <strong>Market:</strong> {dietPlan.user_country || formData.country}
+                  </span>
                   <span className="meta-tag">
                     <strong>BMI:</strong> {dietPlan.daily_targets.bmi} ({dietPlan.daily_targets.bmi_category})
                   </span>
@@ -257,6 +539,17 @@ export default function DietPlannerPage({ user, onSignOut }) {
                 </div>
               </div>
               <div className="result-hero-actions">
+                {user && (
+                  <button 
+                    onClick={handleManualSave} 
+                    className="action-btn-save" 
+                    disabled={isSavingPlan}
+                    title="Save this plan to your profile"
+                  >
+                    <BookmarkCheck size={16} />
+                    <span>{saveSuccessMsg || (isSavingPlan ? 'Saving...' : 'Saved to Profile')}</span>
+                  </button>
+                )}
                 <button onClick={() => window.print()} className="action-btn-outline">
                   <Printer size={16} />
                   <span>Print Plan</span>
@@ -332,32 +625,11 @@ export default function DietPlannerPage({ user, onSignOut }) {
             </div>
 
             {/* Dietitian Clinical Strategy (Gemini Explanation) */}
-            <div className="explanation-card">
-              <div className="explanation-header">
-                <div className="explanation-title-wrap">
-                  <Sparkles size={20} className="text-emerald" />
-                  <h2>AI Dietitian Clinical Strategy & Rationale</h2>
-                </div>
-                <span className="llm-model-badge">Gemini Flash Intelligence</span>
-              </div>
-              <div className="explanation-body markdown-prose">
-                {dietPlan.explanation.split('\n\n').map((paragraph, pIdx) => {
-                  if (paragraph.startsWith('### ') || paragraph.startsWith('#### ')) {
-                    return <h3 key={pIdx} className="prose-heading">{paragraph.replace(/^#+\s*/, '')}</h3>;
-                  }
-                  if (paragraph.startsWith('* ') || paragraph.startsWith('- ')) {
-                    return (
-                      <ul key={pIdx} className="prose-list">
-                        {paragraph.split('\n').map((line, lIdx) => (
-                          <li key={lIdx}>{line.replace(/^[\*\-]\s*/, '')}</li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  return <p key={pIdx}>{paragraph}</p>;
-                })}
-              </div>
-            </div>
+            <ClinicalRationale 
+              explanation={dietPlan.explanation} 
+              targets={dietPlan.daily_targets} 
+              profile={dietPlan.profile || formData} 
+            />
 
             {/* Daily Meals Section */}
             <div className="meals-section">
@@ -452,19 +724,29 @@ export default function DietPlannerPage({ user, onSignOut }) {
               <div className="shopping-grid">
                 {dietPlan.shopping_list.map((item, sIdx) => (
                   <div key={sIdx} className="shopping-card">
-                    <div className="shopping-card-top">
-                      <span className="shopping-cat-badge">{item.category}</span>
-                      <span className="shopping-meal-badge">{item.meal_slot}</span>
-                    </div>
-                    <h4 className="shopping-item-name">{item.name}</h4>
-                    {item.brand && <div className="shopping-brand">{item.brand}</div>}
-                    <div className="shopping-bottom-row">
-                      <span className="shopping-qty">{item.quantity}</span>
-                      {item.barcode && <span className="shopping-code">#{item.barcode}</span>}
+                    <div className="print-checkbox-box" />
+                    <div className="shopping-card-body">
+                      <div className="shopping-card-top">
+                        <span className="shopping-cat-badge">{item.category}</span>
+                        <span className="shopping-meal-badge">{item.meal_slot}</span>
+                      </div>
+                      <h4 className="shopping-item-name">{item.name}</h4>
+                      {item.brand && <div className="shopping-brand">{item.brand}</div>}
+                      <div className="shopping-bottom-row">
+                        <span className="shopping-qty">{item.quantity}</span>
+                        {item.barcode && <span className="shopping-code">#{item.barcode}</span>}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Official Print Footer (Only visible on Printed Sheet) */}
+            <div className="print-doc-footer">
+              <span>EviBite AI • Grounded Supermarket Nutrition Blueprint</span>
+              <span>All products verified against Open Food Facts catalog</span>
+              <span>Confidential Personal Nutrition Document</span>
             </div>
 
             {/* Bottom Actions */}
@@ -644,6 +926,36 @@ export default function DietPlannerPage({ user, onSignOut }) {
                           </div>
                         </div>
                       </div>
+
+                      {/* Country / Regional Supermarket Selection */}
+                      <div className="form-group country-select-group">
+                        <label className="form-label" htmlFor="country-select">
+                          <Globe size={16} className="text-emerald" />
+                          <span>Which country are you located in?</span>
+                          <span className="label-hint"> (Filters genuine products available in your regional supermarkets)</span>
+                        </label>
+                        <div className="country-select-box">
+                          <select
+                            id="country-select"
+                            value={formData.country}
+                            onChange={(e) => handleInputChange('country', e.target.value)}
+                            className="form-select country-dropdown"
+                          >
+                            <option value="United States">🇺🇸 United States (US Supermarkets & Brands)</option>
+                            <option value="United Kingdom">🇬🇧 United Kingdom (UK Supermarkets & Brands)</option>
+                            <option value="Sri Lanka">🇱🇰 Sri Lanka (Sri Lankan Supermarkets & Local Staples)</option>
+                            <option value="India">🇮🇳 India (Indian Supermarket Staples & Dhal/Curd)</option>
+                            <option value="Canada">🇨🇦 Canada (Canadian Supermarkets)</option>
+                            <option value="Australia">🇦🇺 Australia (Coles, Woolworths & Local)</option>
+                            <option value="France">🇫🇷 France (Carrefour, Monoprix & European)</option>
+                            <option value="Germany">🇩🇪 Germany (Rewe, Edeka & European)</option>
+                            <option value="Global">🌎 Global / International (All Supermarket Products)</option>
+                          </select>
+                        </div>
+                        <p className="country-select-hint">
+                          The AI Dietitian will prioritize products and portion sizes stocked in {formData.country} grocery stores.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="step-nav-bar right-only">
@@ -822,6 +1134,40 @@ export default function DietPlannerPage({ user, onSignOut }) {
                           );
                         })}
                       </div>
+
+                      {/* Custom Allergy Input (Visible when 'Other' is selected) */}
+                      {formData.allergies.includes('other') && (
+                        <div className="other-allergy-field-wrap animate-fade-in">
+                          <label className="other-allergy-label" htmlFor="custom-allergy-input">
+                            <ShieldAlert size={16} className="text-amber" />
+                            <span>Specify Custom Allergies / Ingredients to Exclude</span>
+                          </label>
+                          <div className="other-allergy-input-box">
+                            <input
+                              id="custom-allergy-input"
+                              type="text"
+                              className="other-allergy-input"
+                              placeholder="e.g. Sesame, Mustard, Shellfish, Strawberries, Corn"
+                              value={otherAllergyText}
+                              onChange={(e) => setOtherAllergyText(e.target.value)}
+                              autoFocus
+                            />
+                            {otherAllergyText && (
+                              <button
+                                type="button"
+                                className="clear-other-btn"
+                                onClick={() => setOtherAllergyText('')}
+                                title="Clear input"
+                              >
+                                &times;
+                              </button>
+                            )}
+                          </div>
+                          <p className="other-allergy-hint">
+                            Separate multiple ingredients with commas. The AI Dietitian will strictly exclude any supermarket items containing these.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Health Conditions */}

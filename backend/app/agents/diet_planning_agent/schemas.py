@@ -71,6 +71,7 @@ class DietProfile(BaseModel):
     budget: BudgetLevel = Field(default=BudgetLevel.MEDIUM, description="Budget constraint")
     meal_frequency: MealFrequency = Field(default=MealFrequency.THREE_MEALS, description="Daily meal count")
     cooking_preference: CookingPreference = Field(default=CookingPreference.NORMAL_COOKING, description="Cooking willingness")
+    country: str = Field(default="United States", description="User's country or regional grocery market")
 
 
 class NutritionTargets(BaseModel):
@@ -144,6 +145,7 @@ class GeneratedDietPlan(BaseModel):
     trace_id: str
     user_goal: str
     user_diet: str
+    user_country: str = "United States"
     daily_targets: NutritionTargets
     meals: List[MealSlot] = Field(default_factory=list)
     shopping_list: List[ShoppingListItem] = Field(default_factory=list)

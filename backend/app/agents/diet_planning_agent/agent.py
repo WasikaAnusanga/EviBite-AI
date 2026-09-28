@@ -152,6 +152,7 @@ The user has submitted their biometric and dietary health profile:
 - Budget Constraint: {profile.budget.value.title()}
 - Food Preferences: {profile.food_preferences or 'Standard supermarket staples'}
 - Cooking Willingness: {profile.cooking_preference.value.replace('_', ' ').title()}
+- Country / Regional Supermarket Market: {profile.country}
 
 Calculated Daily Nutritional Targets:
 - Target Calories: {targets.daily_calories} kcal (BMR: {targets.bmr} kcal, TDEE: {targets.tdee} kcal)
@@ -167,10 +168,20 @@ Generated Supermarket Meal Structure:
 Instructions:
 1. Provide a warm, empowering, highly personalized diet explanation tailored specifically to their goal of {profile.goal.value.replace('_', ' ')}.
 2. Explain the physiological rationale for their daily caloric target ({targets.daily_calories} kcal) and macronutrient balance.
-3. Highlight why these specific packaged supermarket products were selected (referencing their high protein, low sugar, allergen safety, and supermarket convenience).
+3. Highlight why these specific packaged supermarket products were selected (referencing their availability in {profile.country} supermarkets, high protein, low sugar, allergen safety, and convenience).
 4. Note health precautions addressing their declared allergies and health conditions (e.g. sugar control, sodium moderation).
-5. Provide 2-3 practical, actionable tips for meal prep and shopping in a supermarket.
-6. Keep the formatting clean, professional, and visually engaging with clear markdown sections and bullet points.
+5. Provide 2-3 practical, actionable tips for meal prep and shopping in {profile.country} supermarkets.
+
+Strict Formatting Guidelines:
+- Start with a warm 1-2 sentence greeting and personalized overview.
+- Use explicit markdown level-3 headings (`### `) for each section on its own line:
+  ### 1. Physiological & Caloric Rationale
+  ### 2. Supermarket Product Selection Strategy
+  ### 3. Allergen Safety & Health Precautions
+  ### 4. Practical Shopping & Meal Prep Tips
+- Always format macro metrics and key product names in bold (e.g. **2,595 kcal**, **Protein (143g):**, **Fage Total 0% Greek Yogurt**).
+- Use bullet points (`* `) on separate lines for specific items.
+- Do not use horizontal rule lines (`---`) or write section titles without `### ` headers.
 """
 
     if api_key:
@@ -184,7 +195,10 @@ Instructions:
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.35),
+                config=types.GenerateContentConfig(
+                    temperature=0.3,
+                    max_output_tokens=750,
+                ),
             )
             if response.text:
                 return response.text.strip()
@@ -274,6 +288,7 @@ class DietPlanningAgent:
             trace_id=trace_id,
             user_goal=profile.goal.value.replace("_", " ").title(),
             user_diet=profile.diet.value.replace("_", " ").title(),
+            user_country=profile.country,
             daily_targets=targets,
             meals=meal_slots,
             shopping_list=shopping_list,

@@ -20,6 +20,7 @@ from backend.app.agents.diet_planning_agent.schemas import (
 )
 from backend.app.agents.retrieval.service import retrieval_service
 from backend.app.db.product_repository import product_repo
+from backend.app.data.regional_products import get_regional_products_for_country
 
 logger = logging.getLogger(__name__)
 
@@ -339,9 +340,40 @@ def score_product(
     else:
         budget_score = 0.4 if is_staple else 0.3
 
+    # 6. COUNTRY / MARKET AVAILABILITY SCORE (1.50 for match, -10.0 for foreign country)
+    # Strictly enforces that items sold in other countries are never recommended for the user's market.
+    country_score = 0.0
+    if profile.country and profile.country.lower() not in ("global", "all"):
+        user_c = profile.country.strip().lower()
+        country_aliases = {
+            "united states": ["united states", "united-states", "us", "usa", "en:united-states"],
+            "united kingdom": ["united kingdom", "united-kingdom", "uk", "great britain", "gb", "en:united-kingdom"],
+            "sri lanka": ["sri lanka", "sri-lanka", "lk", "en:sri-lanka"],
+            "india": ["india", "in", "en:india"],
+            "canada": ["canada", "ca", "en:canada"],
+            "australia": ["australia", "au", "en:australia"],
+            "france": ["france", "fr", "en:france"],
+            "germany": ["germany", "deutschland", "de", "en:germany"],
+        }
+        match_targets = country_aliases.get(user_c, [user_c])
+        if product.countries:
+            prod_c_list = [c.lower() for c in product.countries]
+            matched = any(
+                target in c or c in target
+                for c in prod_c_list
+                for target in match_targets
+            )
+            if matched:
+                country_score = 1.50
+            else:
+                # Heavy penalty if explicitly sold in a different country
+                country_score = -10.0
+        else:
+            country_score = -0.50
+
     # FINAL FORMULA
     final_score = round(
-        nutr_score + goal_score + pref_score + budget_score - allergen_penalty, 3
+        nutr_score + goal_score + pref_score + budget_score + country_score - allergen_penalty, 3
     )
 
     breakdown = {
@@ -349,6 +381,7 @@ def score_product(
         "goal_match_score": round(goal_score, 3),
         "preference_score": round(pref_score, 3),
         "budget_score": round(budget_score, 3),
+        "country_score": round(country_score, 3),
         "allergen_penalty": round(allergen_penalty, 3),
         "final_score": final_score,
     }
@@ -363,41 +396,29 @@ def retrieve_and_rank_products_for_slot(
     limit: int = 16,
 ) -> List[RankedProductItem]:
     """Retrieve supermarket products across diverse nutritional pillars and return them scored and ranked."""
-    pillars = MEAL_SLOT_PILLARS.get(slot_name.lower(), [["food", "protein", "healthy"]])
-
-    # If user provided specific food preferences, query those as well
-    user_prefs = [w.strip() for w in profile.food_preferences.split(",") if len(w.strip()) > 2]
-
     candidates_map: Dict[str, EvidenceObject] = {}
 
-    for pillar_idx, pillar_queries in enumerate(pillars):
-        pillar_candidates = 0
-        queries_to_try = pillar_queries[:3]
-        if user_prefs and pillar_idx == 0:
-            queries_to_try = [user_prefs[0]] + queries_to_try
+    # 1. Instantly seed genuine regional supermarket products for user's selected country
+    regional_items = get_regional_products_for_country(profile.country)
+    for p in regional_items:
+        if not _is_condiment_or_non_meal(p):
+            candidates_map[p.product_id] = p
 
-        for q in queries_to_try:
-            found = product_repo.search(query=q, limit=6)
-            for p in found:
-                if not _is_condiment_or_non_meal(p):
-                    candidates_map[p.product_id] = p
-                    pillar_candidates += 1
+    # 2. Query MongoDB collection if connected and we need more diversity
+    pillars = MEAL_SLOT_PILLARS.get(slot_name.lower(), [["food", "protein", "healthy"]])
+    user_prefs = [w.strip() for w in profile.food_preferences.split(",") if len(w.strip()) > 2]
 
-        # If local database has very few items for this pillar, fetch from Open Food Facts via Retrieval Service
-        if pillar_candidates < 2 and pillar_queries:
-            fallback_query = pillar_queries[0]
+    # Only query external sources if candidates pool is sparse
+    if len(candidates_map) < 6:
+        for pillar_idx, pillar_queries in enumerate(pillars):
+            q = user_prefs[0] if (user_prefs and pillar_idx == 0) else pillar_queries[0]
             try:
-                req = RetrievalRequest(
-                    trace_id=f"diet-retrieval-{slot_name}-p{pillar_idx}",
-                    query=fallback_query,
-                    intent="diet_planning",
-                )
-                res = retrieval_service(req)
-                for cand in res.candidates:
-                    if not _is_condiment_or_non_meal(cand):
-                        candidates_map[cand.product_id] = cand
-            except Exception as e:
-                logger.warning(f"Fallback retrieval for '{fallback_query}' failed: {e}")
+                found = product_repo.search(query=q, limit=4)
+                for p in found:
+                    if not _is_condiment_or_non_meal(p):
+                        candidates_map[p.product_id] = p
+            except Exception:
+                pass
 
     # Rank all candidate products
     ranked: List[RankedProductItem] = []

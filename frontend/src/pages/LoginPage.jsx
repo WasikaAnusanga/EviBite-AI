@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { loginUser } from '../services/api';
 import logoImg from '../logo/logo.png';
 import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
@@ -11,6 +11,10 @@ export default function LoginPage({ onLoginSuccess }) {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const from = location.state?.from?.pathname || '/chat';
+  const isDietRedirect = from.includes('diet');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,7 +26,7 @@ export default function LoginPage({ onLoginSuccess }) {
       localStorage.setItem('evibite_auth_token', res.token);
       localStorage.setItem('evibite_user', JSON.stringify(res.user));
       if (onLoginSuccess) onLoginSuccess(res.user);
-      navigate('/chat');
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message || 'Invalid email or password. Please try again.');
     } finally {
@@ -83,6 +87,28 @@ export default function LoginPage({ onLoginSuccess }) {
               <h2>Sign In</h2>
               <p>Welcome back! Please enter your details.</p>
             </div>
+
+            {isDietRedirect && (
+              <div 
+                className="auth-alert info" 
+                style={{ 
+                  background: '#f0fdf4', 
+                  border: '1.5px solid #86efac', 
+                  color: '#166534',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: '500'
+                }}
+              >
+                <Sparkles size={18} className="text-emerald" style={{ flexShrink: 0 }} />
+                <span>Please sign in to access the AI Diet & Nutrition Planner.</span>
+              </div>
+            )}
 
             {error && (
               <div className="auth-alert error">
@@ -145,7 +171,7 @@ export default function LoginPage({ onLoginSuccess }) {
             <div className="auth-card-footer">
               <p>
                 Don't have an account?{' '}
-                <Link to="/register" className="auth-switch-link">
+                <Link to="/register" state={{ from: location.state?.from }} className="auth-switch-link">
                   Create an account
                 </Link>
               </p>

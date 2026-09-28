@@ -163,3 +163,94 @@ export async function generateDietPlan(profile) {
     throw error;
   }
 }
+
+/**
+ * Save user diet plan to MongoDB
+ * @param {string} userId
+ * @param {Object} plan
+ * @param {Object|null} profile
+ * @param {string|null} planName
+ * @returns {Promise<Object>}
+ */
+export async function saveUserDietPlan(userId, plan, profile = null, planName = null) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/diet-plan/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        plan,
+        profile,
+        plan_name: planName,
+      }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Could not save diet plan');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to save diet plan:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all saved diet plans for a specific user
+ * @param {string} userId
+ * @returns {Promise<Array>}
+ */
+export async function fetchUserDietPlans(userId) {
+  if (!userId) return [];
+  try {
+    const response = await fetch(`${API_BASE_URL}/diet-plan/user/${encodeURIComponent(userId)}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.plans || [];
+  } catch (error) {
+    console.error('Failed to fetch user diet plans:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch a single saved diet plan by ID
+ * @param {string} planId
+ * @param {string|null} userId
+ * @returns {Promise<Object>}
+ */
+export async function fetchDietPlanById(planId, userId = null) {
+  try {
+    const url = userId 
+      ? `${API_BASE_URL}/diet-plan/${encodeURIComponent(planId)}?user_id=${encodeURIComponent(userId)}`
+      : `${API_BASE_URL}/diet-plan/${encodeURIComponent(planId)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Could not load diet plan');
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch diet plan by id:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a saved diet plan from MongoDB
+ * @param {string} planId
+ * @param {string|null} userId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteUserDietPlan(planId, userId = null) {
+  try {
+    const url = userId
+      ? `${API_BASE_URL}/diet-plan/${encodeURIComponent(planId)}?user_id=${encodeURIComponent(userId)}`
+      : `${API_BASE_URL}/diet-plan/${encodeURIComponent(planId)}`;
+    const response = await fetch(url, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Could not delete diet plan');
+    const data = await response.json();
+    return data.success;
+  } catch (error) {
+    console.error('Failed to delete diet plan:', error);
+    throw error;
+  }
+}
+
