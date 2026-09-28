@@ -1,32 +1,80 @@
 import React, { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { User, Bot, ChevronDown, ChevronUp, Activity, Cpu, ShieldAlert } from 'lucide-react';
+
+function parseInlineMarkdown(text) {
+  if (!text) return text;
+  const parts = [];
+  let lastIndex = 0;
+  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const val = match[0];
+    if (val.startsWith('**') && val.endsWith('**')) {
+      parts.push(<strong key={match.index}>{val.slice(2, -2)}</strong>);
+    } else if (val.startsWith('*') && val.endsWith('*')) {
+      parts.push(<em key={match.index}>{val.slice(1, -1)}</em>);
+    } else if (val.startsWith('`') && val.endsWith('`')) {
+      parts.push(<code key={match.index} style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: '3px', fontSize: '0.9em' }}>{val.slice(1, -1)}</code>);
+    } else {
+      parts.push(val);
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
 
 function FormattedText({ text }) {
   if (!text) return null;
 
   // Clean technical brackets e.g. "[Product Name]" if any slip through
-  let cleanedText = text.replace(/\[([^\]]+)\]/g, '$1:');
-  cleanedText = cleanedText.replace(/•\s*/g, '* ');
-  cleanedText = cleanedText.replace(/([^\n])\n(\*|-|\d+\.)\s+/g, '$1\n\n$2 ');
+  const cleanedText = text.replace(/\[([^\]]+)\]/g, '$1:');
+  const lines = cleanedText.split('\n');
 
   return (
     <div className="formatted-text">
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h3: ({ node, ...props }) => <h4 className="formatted-heading" {...props} />,
-          h4: ({ node, ...props }) => <h4 className="formatted-heading" {...props} />,
-          p: ({ node, ...props }) => <p className="formatted-paragraph" {...props} />,
-          ul: ({ node, ...props }) => <ul className="formatted-list" {...props} />,
-          ol: ({ node, ...props }) => <ol className="formatted-ordered-list" {...props} />,
-          li: ({ node, ...props }) => <li className="formatted-list-item" {...props} />,
-          strong: ({ node, ...props }) => <strong className="clinical-strong" {...props} />
-        }}
-      >
-        {cleanedText}
-      </ReactMarkdown>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="line-spacer" style={{ height: '6px' }} />;
+
+        // Headers ### or ## or #
+        if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+          const headerText = trimmed.replace(/^#+\s*/, '');
+          return (
+            <h4 key={idx} className="formatted-heading">
+              {parseInlineMarkdown(headerText)}
+            </h4>
+          );
+        }
+
+        // Bullet points: -, *, •, or numbered lists e.g. 1.
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ') || /^\d+\.\s+/.test(trimmed)) {
+          const isNumbered = /^\d+\.\s+/.test(trimmed);
+          const numMatch = trimmed.match(/^(\d+\.)\s+/);
+          const dot = isNumbered && numMatch ? numMatch[1] : '•';
+          const itemText = isNumbered ? trimmed.replace(/^\d+\.\s+/, '') : trimmed.replace(/^[-*•]\s*/, '');
+          return (
+            <div key={idx} className="formatted-bullet">
+              <span className="bullet-dot">{dot}</span>
+              <span className="bullet-content">{parseInlineMarkdown(itemText)}</span>
+            </div>
+          );
+        }
+
+        return (
+          <p key={idx} className="formatted-paragraph">
+            {parseInlineMarkdown(trimmed)}
+          </p>
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Sparkles, 
@@ -36,7 +36,9 @@ import {
   BookmarkCheck,
   Trash2,
   Calendar,
-  X
+  X,
+  ChevronDown,
+  MessageSquare
 } from 'lucide-react';
 import { generateDietPlan, saveUserDietPlan, fetchUserDietPlans, deleteUserDietPlan } from '../services/api';
 import logoImg from '../logo/logo.png';
@@ -54,6 +56,29 @@ export default function DietPlannerPage({ user, onSignOut }) {
   const [copiedList, setCopiedList] = useState(false);
   const [otherAllergyText, setOtherAllergyText] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Profile Dropdown State
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Saved Plans State
   const [savedPlans, setSavedPlans] = useState([]);
@@ -259,6 +284,17 @@ export default function DietPlannerPage({ user, onSignOut }) {
     setTimeout(() => setCopiedList(false), 2500);
   };
 
+  const handlePrintPlan = () => {
+    const originalTitle = document.title;
+    const country = (dietPlan?.user_country || formData?.country || 'Supermarket').replace(/\s+/g, '_');
+    const goal = (dietPlan?.user_goal || 'Diet_Plan').replace(/\s+/g, '_');
+    document.title = `EviBite_DietPlan_${country}_${goal}`;
+    window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1200);
+  };
+
   const loadingSteps = [
     'Computing biometric energy profile and Mifflin-St Jeor BMR...',
     'Scanning live supermarket database for goal-compatible foods...',
@@ -269,58 +305,102 @@ export default function DietPlannerPage({ user, onSignOut }) {
 
   return (
     <div className="diet-planner-layout">
-      {/* Top Navbar */}
-      <header className="diet-header">
-        <div className="diet-header-left">
-          <Link to="/" className="diet-logo-link">
-            <img src={logoImg} alt="EviBite AI" className="diet-logo-img" />
-            <div className="diet-brand-text">
-              <span className="brand-title">EviBite AI</span>
-              <span className="brand-badge">Diet & Nutrition Planning Agent</span>
+      {/* HEADER NAVBAR */}
+      <header className="landing-nav">
+        <div className="landing-nav-container">
+          <div className="landing-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+            <div className="brand-icon">
+              <Sparkles size={18} color="#10b981" />
             </div>
-          </Link>
-        </div>
-        <div className="diet-header-right">
-          <button 
-            type="button"
-            onClick={() => setIsSavedPlansOpen(true)} 
-            className="diet-nav-btn secondary saved-plans-nav-btn"
-            title="View your saved diet plans"
-          >
-            <Bookmark size={15} className="text-emerald" />
-            <span>Saved Plans</span>
-            {savedPlans.length > 0 && <span className="nav-count-badge">{savedPlans.length}</span>}
-          </button>
-          <Link to="/chat" className="diet-nav-btn secondary">
-            <Utensils size={15} />
-            <span>Chat Assistant</span>
-          </Link>
-          {dietPlan && (
-            <button 
-              onClick={() => setDietPlan(null)} 
-              className="diet-nav-btn primary"
-            >
-              <RotateCcw size={15} />
-              <span>New Plan</span>
+            <span className="brand-title">EviBite AI</span>
+            <span className="version-badge">v2.4</span>
+          </div>
+
+
+          <div className="nav-actions desktop-only">
+            {user && (
+              <button 
+                type="button"
+                onClick={() => setIsSavedPlansOpen(true)} 
+                className="user-nav-profile-btn"
+                title="View your saved diet plans"
+                style={{ gap: '6px', padding: '6px 14px' }}
+              >
+                <Bookmark size={15} color="#10b981" />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Saved Plans</span>
+                {savedPlans.length > 0 && <span className="nav-count-badge" style={{ marginLeft: '2px' }}>{savedPlans.length}</span>}
+              </button>
+            )}
+
+            <button className="btn-primary" onClick={() => navigate('/chat')}>
+              Go to Chatbot <ArrowRight size={16} />
             </button>
-          )}
-          {user && (
-            <div className="diet-user-pill">
-              <div className="diet-user-avatar">
-                <User size={13} />
-              </div>
-              <span className="diet-user-name">{user.name || user.email?.split('@')[0]}</span>
-              {onSignOut && (
-                <button 
-                  onClick={onSignOut} 
-                  className="diet-logout-icon-btn" 
-                  title="Sign Out"
+
+            {user ? (
+              <div className="user-profile-dropdown-wrapper" ref={profileRef}>
+                <button
+                  className={`user-nav-profile-btn ${profileDropdownOpen ? 'active' : ''}`}
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  aria-label="User Profile Menu"
                 >
-                  <LogOut size={13} />
+                  <div className="user-nav-avatar">
+                    {getInitials(user.name || user.email)}
+                  </div>
+                  <span className="user-nav-name">{user.name || user.email}</span>
+                  <ChevronDown size={14} className={`dropdown-chevron ${profileDropdownOpen ? 'open' : ''}`} />
                 </button>
-              )}
-            </div>
-          )}
+
+                {profileDropdownOpen && (
+                  <div className="user-profile-dropdown-menu">
+                    <div className="dropdown-user-header">
+                      <div className="dropdown-avatar-large">
+                        {getInitials(user.name || user.email)}
+                      </div>
+                      <div className="dropdown-user-details">
+                        <span className="dropdown-user-name">{user.name || 'User'}</span>
+                        <span className="dropdown-user-email">{user.email}</span>
+                      </div>
+                    </div>
+                    <div className="dropdown-divider" />
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        setIsSavedPlansOpen(true);
+                      }}
+                    >
+                      <Bookmark size={16} />
+                      <span>Saved Plans ({savedPlans.length})</span>
+                    </button>
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        navigate('/chat');
+                      }}
+                    >
+                      <MessageSquare size={16} />
+                      <span>Go to Chatbot</span>
+                    </button>
+                    <button
+                      className="dropdown-menu-item logout-item"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        if (onSignOut) onSignOut();
+                      }}
+                    >
+                      <LogOut size={16} />
+                      <span>Log out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button className="btn-secondary" onClick={() => navigate('/login')}>
+                Sign In
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -550,7 +630,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     <span>{saveSuccessMsg || (isSavingPlan ? 'Saving...' : 'Saved to Profile')}</span>
                   </button>
                 )}
-                <button onClick={() => window.print()} className="action-btn-outline">
+                <button onClick={handlePrintPlan} className="action-btn-outline" title="Print or save as clean PDF without URL footers">
                   <Printer size={16} />
                   <span>Print Plan</span>
                 </button>

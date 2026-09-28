@@ -318,6 +318,16 @@ def triage_message(request: TriageRequest) -> TriageOutput:
     else:
         risk_level = RiskLevel.LOW
 
+    # Check if query refers to the user's diet plan / personal nutrition blueprint
+    diet_plan_terms = [
+        "diet plan", "my diet", "my plan", "my meal plan", "my meals",
+        "my calories", "my daily calories", "my calorie target", "my macros",
+        "my protein target", "my goal", "my weight goal", "my shopping list",
+        "according to my plan", "based on my plan", "fits my plan", "fit my plan",
+        "fit in my diet", "in my diet plan", "my breakfast", "my lunch", "my dinner"
+    ]
+    is_diet_query = any(term in text for term in diet_plan_terms)
+
     # 4. Check Clarification Need
     discovery_indicators = ["give me", "show", "find", "recommend", "products containing", "options", "list", "what products", "which", "products", "search", "best", "low", "high"]
     is_discovery_query = (
@@ -326,7 +336,8 @@ def triage_message(request: TriageRequest) -> TriageOutput:
         or bool(nutrients)
         or bool(dietary_requirements)
         or bool(category)
-        or primary_intent in {Intent.RECOMMENDATION, Intent.COMPARISON}
+        or is_diet_query
+        or primary_intent in {Intent.RECOMMENDATION, Intent.COMPARISON, Intent.DIETARY_QUERY}
     )
 
     conversational_words = {
@@ -350,6 +361,9 @@ def triage_message(request: TriageRequest) -> TriageOutput:
 
     if is_conversational and not has_valid_product:
         primary_intent = Intent.UNKNOWN
+
+    if is_diet_query and not has_valid_product:
+        primary_intent = Intent.DIETARY_QUERY
 
     if missing_fields:
         status = TriageStatus.CLARIFICATION_REQUIRED

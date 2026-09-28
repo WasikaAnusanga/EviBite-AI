@@ -91,6 +91,7 @@ class ResponseRequest(BaseModel):
     preferences: dict[str, bool] = Field(default_factory=dict)
     nutrients: list[str] = Field(default_factory=list)
     chat_history: list[dict[str, str]] = Field(default_factory=list)
+    user_diet_plan: dict[str, Any] | None = None
 
     
 class ResponseResponse(BaseModel):

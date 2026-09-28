@@ -87,8 +87,9 @@ def _generate_llm_response(
     findings: list[str],
     triage_status: str = "READY",
     chat_history: list[dict[str, str]] | None = None,
+    user_diet_plan: dict | None = None,
 ) -> str | None:
-    """Use Gemini LLM to synthesize a natural, intelligent, grounded answer with multi-turn conversation memory."""
+    """Use Gemini LLM to synthesize a natural, intelligent, grounded answer with multi-turn conversation memory and user diet plan context."""
     api_key = (
         os.getenv("GEMINI_API_KEY")
         or os.getenv("LLM_API_KEY")
@@ -115,7 +116,40 @@ def _generate_llm_response(
             turns_fmt.append(f"{role_label}: {turn.get('content')}")
         history_str = "\n".join(turns_fmt)
 
-    prompt = f"""You are EviBite AI, an intelligent, friendly supermarket food product and nutrition assistant (grounded exclusively in supermarket food items, ingredients, allergens, and dietary health).
+    # Format user's active diet plan context if available
+    diet_plan_str = ""
+    if user_diet_plan:
+        daily = user_diet_plan.get("daily_targets") or {}
+        profile = user_diet_plan.get("profile") or {}
+        meals = user_diet_plan.get("meals") or []
+        shopping = user_diet_plan.get("shopping_list") or []
+
+        meal_items = []
+        for m in meals:
+            p_names = [f"{it.get('name')} ({it.get('calories')} kcal)" for it in m.get("items", [])]
+            meal_items.append(f"  • {m.get('meal_name')}: {', '.join(p_names)} (Target: {m.get('target_calories')} kcal)")
+
+        shop_sample = [f"{s.get('name')} ({s.get('quantity')})" for s in shopping[:8]]
+
+        diet_plan_str = f"""
+User's Active Personalized Diet Plan (Saved in Profile):
+- Plan Title: {user_diet_plan.get('title', 'Personalized Blueprint')}
+- Goal: {user_diet_plan.get('user_goal')}
+- Dietary Lifestyle: {user_diet_plan.get('user_diet')}
+- Regional Market: {user_diet_plan.get('user_country', 'Global')}
+- Daily Target Energy: {daily.get('daily_calories')} kcal/day
+- Target Macronutrients: Protein: {daily.get('protein_target')}g | Carbs: {daily.get('carbs_target')}g | Fat: {daily.get('fat_target')}g
+- Biometrics: BMI: {daily.get('bmi')} ({daily.get('bmi_category')}) | BMR: {daily.get('bmr')} kcal | TDEE: {daily.get('tdee')} kcal
+- Declared Allergies: {', '.join(profile.get('allergies', [])) if profile.get('allergies') else 'None'}
+- Medical Considerations: {', '.join(profile.get('medical_conditions', [])) if profile.get('medical_conditions') else 'None'}
+- Planned Daily Meals:
+{chr(10).join(meal_items) if meal_items else '  (None listed)'}
+- Key Grocery Items: {', '.join(shop_sample) if shop_sample else 'None'}
+"""
+
+    prompt = f"""You are EviBite AI, an intelligent, friendly supermarket food product, nutrition, and diet planning assistant.
+
+{diet_plan_str if diet_plan_str else "User Diet Plan Context: (The user has not created a diet plan yet. If they ask about their diet plan, kindly advise them to use the 'Diet Planner' in the top navigation to generate one in seconds.)"}
 
 Recent Conversation History:
 {history_str if history_str else "(New Conversation)"}
@@ -130,14 +164,15 @@ Safety Analysis Findings:
 {json.dumps(findings, indent=2)}
 
 Instructions:
-1. Multi-turn conversation memory: Pay attention to prior turns! If the user uses pronouns like "its", "it", "this product", or asks follow-ups like "i want about its sugar level", refer directly to the product discussed in previous turns (e.g. Coca-Cola Zero Sugar).
-2. Directly answer the user's specific follow-up question (e.g., if they asked for sugar level, state the exact sugar level clearly per 100g).
-3. If products were retrieved: Format a clear, intelligent answer with bullet points, ingredients, allergen warnings, and nutrient details per 100g.
-4. User-friendly formatting: Clean up any technical bracketed prefixes like [Product Name] or raw internal log text. Make the output look clean, elegant, and natural.
-5. Conversational remarks & Gratitude: If the user message is a conversational pleasantry, greeting, gratitude, or closing phrase (e.g., "okay thanks", "thank you", "got it", "cool", "hi", "hello", "bye"), respond warmly, politely, and naturally as EviBite AI without demanding product information (e.g., "You're very welcome! Feel free to ask whenever you have questions about supermarket food products, ingredients, or nutrition.").
-6. Keep the tone helpful, concise, professional, and natural like ChatGPT, while staying grounded in supermarket food products.
+1. User Diet Plan Awareness: You have direct access to the user's active diet plan above!
+   - If the user asks about their diet plan, daily calorie budget, macronutrient targets, planned meals, or dietary goal, answer directly, accurately, and encouragingly using the details from their saved plan.
+   - If the user asks whether a specific product (e.g., Nutella, bread, milk) fits into their diet plan, evaluate it against their target calories, macronutrients, declared allergies, and dietary lifestyle (e.g. Vegetarian/Vegan/Halal).
+2. Multi-turn conversation memory: Pay attention to prior turns! If the user uses pronouns like "its", "it", "this product", or asks follow-ups, refer directly to the product discussed in previous turns.
+3. Directly answer the user's specific question clearly with bullet points, ingredients, allergen warnings, and nutrient details per 100g.
+4. Clean formatting: Never output raw technical bracketed prefixes like [Product Name].
+5. Conversational remarks & Gratitude: If the user sends greetings, gratitude, or casual remarks, respond warmly and naturally.
+6. Keep the tone helpful, concise, professional, and grounded in supermarket food products.
 """
-
 
     try:
         from google import genai
@@ -161,10 +196,11 @@ Instructions:
 
 
 def response_service(request: ResponseRequest) -> ResponseResponse:
-    # Case 1: Handle greetings, clarifications, or unsupported queries via LLM
+    # Case 1: Handle greetings, clarifications, diet queries, or unsupported queries via LLM
     has_findings = bool(request.analysis and request.analysis.findings)
     analysis_findings = request.analysis.findings if has_findings else []
     ranked_evidence = rank_candidates(request.evidence, request.query, request.nutrients)
+    user_diet_plan = getattr(request, "user_diet_plan", None)
 
     # Attempt LLM Response Synthesis first for all queries
     llm_answer = _generate_llm_response(
@@ -173,10 +209,30 @@ def response_service(request: ResponseRequest) -> ResponseResponse:
         findings=analysis_findings,
         triage_status=request.triage_status,
         chat_history=request.chat_history,
+        user_diet_plan=user_diet_plan,
     )
 
     if llm_answer:
         return ResponseResponse(trace_id=request.trace_id, answer=llm_answer)
+
+    # Fallback response for diet plan questions if LLM is unavailable
+    if user_diet_plan:
+        plan = user_diet_plan
+        daily = plan.get("daily_targets") or {}
+        q_lower = request.query.lower()
+        if any(w in q_lower for w in ["diet plan", "my diet", "my plan", "calories", "macros", "target", "meals"]):
+            return ResponseResponse(
+                trace_id=request.trace_id,
+                answer=(
+                    f"Here is your active diet plan summary:\n\n"
+                    f"• **Plan**: {plan.get('title', 'Personalized Blueprint')}\n"
+                    f"• **Goal**: {plan.get('user_goal')}\n"
+                    f"• **Daily Calorie Target**: {daily.get('daily_calories')} kcal/day\n"
+                    f"• **Macronutrients**: Protein {daily.get('protein_target')}g | Carbs {daily.get('carbs_target')}g | Fat {daily.get('fat_target')}g\n"
+                    f"• **Regional Market**: {plan.get('user_country', 'Global')}\n\n"
+                    f"Feel free to ask me if any supermarket food product fits into this plan!"
+                ),
+            )
 
     # Fallback formatting if LLM call fails
     if request.triage_status == "UNSUPPORTED":
