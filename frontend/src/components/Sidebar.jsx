@@ -57,6 +57,12 @@ export default function Sidebar({
         <span>New Chat</span>
       </button>
 
+      {/* Diet & Nutrition Planner Button */}
+      <Link to="/diet-plan" className="sidebar-diet-btn" style={{ textDecoration: 'none' }}>
+        <Sparkles size={16} className="text-emerald" />
+        <span>Diet & Nutrition Planner</span>
+      </Link>
+
       {/* Recent Chats Navigation */}
       <div className="sidebar-nav">
         <div className="nav-section-title">Recent Chats</div>

@@ -9,6 +9,7 @@ and automatic cloud caching of external Open Food Facts products.
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
@@ -60,10 +61,15 @@ class ProductRepository:
         self.db = None
         self.collection = None
         self._is_connected = False
+        self._last_fail_time = 0.0
         self._connect_db()
 
     def _connect_db(self):
         """Initialize MongoDB client and ensure collection indexes."""
+        # Cooldown: Do not retry connection more than once every 120 seconds if offline
+        if time.time() - getattr(self, "_last_fail_time", 0.0) < 120.0:
+            return
+
         _configure_dns_resolver()
         try:
             import pymongo
@@ -74,9 +80,9 @@ class ProductRepository:
                 tls=True,
                 tlsAllowInvalidCertificates=True,
                 tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=10000,
-                connectTimeoutMS=10000,
-                socketTimeoutMS=15000,
+                serverSelectionTimeoutMS=2000,
+                connectTimeoutMS=2000,
+                socketTimeoutMS=3000,
             )
             client.admin.command("ping")
 
@@ -109,10 +115,11 @@ class ProductRepository:
             logger.info("Successfully connected to MongoDB Atlas for Product Database!")
         except Exception as e:
             self._is_connected = False
-            logger.warning(f"MongoDB Product database connection notice: {e}.")
+            self._last_fail_time = time.time()
+            logger.warning(f"MongoDB Product database connection notice: {e}. Operating in resilient offline mode.")
 
     def _ensure_connected(self) -> bool:
-        """Attempt reconnection if client was disconnected."""
+        """Attempt reconnection if client was disconnected, respecting cooldown."""
         if not self._is_connected or self.collection is None:
             self._connect_db()
         return self._is_connected
@@ -158,14 +165,17 @@ class ProductRepository:
                 # Query text search (case-insensitive regex for high recall)
                 query_str = query.strip()
                 if query_str:
-                    words = [w for w in query_str.lower().split() if len(w) > 2]
+                    common_stopwords = {"water", "spring", "with", "and", "for", "the", "fresh", "sweet", "pure", "natural", "organic", "chunks", "canned", "free", "original", "style", "pack"}
+                    words = [w for w in re.findall(r'[a-zA-Z]{3,}', query_str.lower()) if w not in common_stopwords]
+                    if not words:
+                        words = re.findall(r'[a-zA-Z]{3,}', query_str.lower())
+
                     if words:
                         regex_pattern = "|".join(re.escape(w) for w in words)
                         query_filter["$or"] = [
                             {"name": {"$regex": regex_pattern, "$options": "i"}},
-                            {"brand": {"$regex": regex_pattern, "$options": "i"}},
                             {"categories": {"$regex": regex_pattern, "$options": "i"}},
-                            {"ingredients_text": {"$regex": regex_pattern, "$options": "i"}},
+                            {"brand": {"$regex": regex_pattern, "$options": "i"}},
                         ]
 
                 cursor = self.collection.find(query_filter).limit(limit)
@@ -213,6 +223,7 @@ class ProductRepository:
             categories=doc.get("categories", []),
             ingredients_text=doc.get("ingredients_text"),
             allergens=doc.get("allergens", []),
+            countries=doc.get("countries", []),
             nutrition=doc.get("nutrition", {}),
             completeness=float(doc.get("completeness", 1.0)),
             source=doc.get("source", "mongodb_cloud"),

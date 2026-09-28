@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { registerUser } from '../services/api';
 import logoImg from '../logo/logo.png';
 import { Sparkles, User, Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
@@ -14,6 +14,9 @@ export default function RegisterPage({ onRegisterSuccess }) {
   const [successMsg, setSuccessMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const from = location.state?.from?.pathname || '/chat';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,7 +42,7 @@ export default function RegisterPage({ onRegisterSuccess }) {
       setSuccessMsg('Account registered successfully! Redirecting...');
       if (onRegisterSuccess) onRegisterSuccess(res.user);
       setTimeout(() => {
-        navigate('/');
+        navigate(from, { replace: true });
       }, 1000);
     } catch (err) {
       setError(err.message || 'Registration failed. Please check your details.');
@@ -202,7 +205,7 @@ export default function RegisterPage({ onRegisterSuccess }) {
             <div className="auth-card-footer">
               <p>
                 Already have an account?{' '}
-                <Link to="/login" className="auth-switch-link">
+                <Link to="/login" state={{ from: location.state?.from }} className="auth-switch-link">
                   Sign In
                 </Link>
               </p>

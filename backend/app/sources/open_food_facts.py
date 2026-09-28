@@ -22,7 +22,7 @@ USER_AGENT = "EviBiteAI - WebAnalyticsAssignment - Version 1.0 (contact: student
 class OpenFoodFactsSource(ProductSource):
     """ProductSource implementation targeting Open Food Facts public API."""
 
-    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 2.0):
+    def __init__(self, cache_ttl_seconds: int = 3600, timeout_seconds: float = 2.5):
         self.cache_ttl = cache_ttl_seconds
         self.timeout = timeout_seconds
         self._cache: dict[str, tuple[float, Any]] = {}
@@ -93,7 +93,8 @@ class OpenFoodFactsSource(ProductSource):
             "page_size": min(limit, 20),
             "fields": (
                 "code,product_name,product_name_en,brands,categories,categories_tags,"
-                "ingredients_text,ingredients_text_en,allergens,allergens_tags,nutriments"
+                "ingredients_text,ingredients_text_en,allergens,allergens_tags,nutriments,"
+                "countries,countries_tags,countries_hierarchy"
             ),
         }
 
@@ -164,6 +165,18 @@ class OpenFoodFactsSource(ProductSource):
                 if clean and clean not in allergens:
                     allergens.append(clean)
 
+        # Extract countries
+        raw_countries = raw.get("countries_tags") or raw.get("countries_hierarchy") or []
+        if isinstance(raw_countries, str):
+            raw_countries = [c.strip() for c in raw_countries.split(",") if c.strip()]
+        countries = [
+            c.replace("en:", "").replace("-", " ").strip().lower()
+            for c in raw_countries
+            if isinstance(c, str)
+        ]
+        if not countries and raw.get("countries"):
+            countries = [c.strip().lower() for c in str(raw["countries"]).split(",") if c.strip()]
+
         # Extract nutrition
         nutriments = raw.get("nutriments") or {}
         nutrition = self._extract_nutrition(nutriments)
@@ -179,6 +192,7 @@ class OpenFoodFactsSource(ProductSource):
             categories=categories,
             ingredients_text=ingredients_text,
             allergens=allergens,
+            countries=countries,
             nutrition=nutrition,
             completeness=completeness,
             source="open_food_facts",

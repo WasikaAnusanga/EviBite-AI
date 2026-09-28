@@ -5,7 +5,7 @@ function parseInlineMarkdown(text) {
   if (!text) return text;
   const parts = [];
   let lastIndex = 0;
-  const regex = /(\*\*.*?\*\*|\*.*?\*)/g;
+  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
   let match;
 
   while ((match = regex.exec(text)) !== null) {
@@ -17,6 +17,8 @@ function parseInlineMarkdown(text) {
       parts.push(<strong key={match.index}>{val.slice(2, -2)}</strong>);
     } else if (val.startsWith('*') && val.endsWith('*')) {
       parts.push(<em key={match.index}>{val.slice(1, -1)}</em>);
+    } else if (val.startsWith('`') && val.endsWith('`')) {
+      parts.push(<code key={match.index} style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: '3px', fontSize: '0.9em' }}>{val.slice(1, -1)}</code>);
     } else {
       parts.push(val);
     }
@@ -41,9 +43,9 @@ function FormattedText({ text }) {
     <div className="formatted-text">
       {lines.map((line, idx) => {
         const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} className="line-spacer" />;
+        if (!trimmed) return <div key={idx} className="line-spacer" style={{ height: '6px' }} />;
 
-        // Headers ### or ##
+        // Headers ### or ## or #
         if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
           const headerText = trimmed.replace(/^#+\s*/, '');
           return (
@@ -53,12 +55,15 @@ function FormattedText({ text }) {
           );
         }
 
-        // Bullet points - or * or •
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
-          const itemText = trimmed.replace(/^[-*•]\s*/, '');
+        // Bullet points: -, *, •, or numbered lists e.g. 1.
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ') || /^\d+\.\s+/.test(trimmed)) {
+          const isNumbered = /^\d+\.\s+/.test(trimmed);
+          const numMatch = trimmed.match(/^(\d+\.)\s+/);
+          const dot = isNumbered && numMatch ? numMatch[1] : '•';
+          const itemText = isNumbered ? trimmed.replace(/^\d+\.\s+/, '') : trimmed.replace(/^[-*•]\s*/, '');
           return (
             <div key={idx} className="formatted-bullet">
-              <span className="bullet-dot">•</span>
+              <span className="bullet-dot">{dot}</span>
               <span className="bullet-content">{parseInlineMarkdown(itemText)}</span>
             </div>
           );

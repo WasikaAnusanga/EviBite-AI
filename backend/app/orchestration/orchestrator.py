@@ -40,6 +40,17 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
     execution_steps: list[ExecutionStep] = []
     execution_path: list[str] = []
 
+    # Load user's active/latest saved diet plan from MongoDB or memory
+    user_diet_plan = None
+    if request.user_id:
+        try:
+            from backend.app.db.diet_plan_repository import diet_plan_repo
+            user_plans = diet_plan_repo.get_user_plans(request.user_id)
+            if user_plans:
+                user_diet_plan = user_plans[0]
+        except Exception as e:
+            logger.warning(f"Could not load user diet plan for user {request.user_id}: {e}")
+
     # Record user query in session memory
     session_memory.add_user_turn(request.session_id, user_query)
     chat_history = session_memory.get_formatted_history(request.session_id)
@@ -68,6 +79,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
                 intent=triage_output.primary_intent.value,
                 triage_status=triage_output.triage_status.value,
                 chat_history=chat_history,
+                user_diet_plan=user_diet_plan,
             )
         )
         execution_steps.append(
@@ -99,6 +111,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
                 intent=triage_output.primary_intent.value,
                 triage_status=triage_output.triage_status.value,
                 chat_history=chat_history,
+                user_diet_plan=user_diet_plan,
             )
         )
         execution_steps.append(
@@ -128,6 +141,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         intent=triage_output.primary_intent.value,
         products=[p.model_dump() for p in triage_output.products],
         category=triage_output.category,
+        country=(user_diet_plan.get("user_country") if user_diet_plan else None),
         requested_fields=triage_output.requested_fields,
     )
     retrieval_res = retrieval_service(retrieval_req)
@@ -177,6 +191,7 @@ def run_orchestration(request: ChatRequest) -> ChatResponse:
         preferences=triage_output.preferences,
         nutrients=triage_output.nutrients,
         chat_history=chat_history,
+        user_diet_plan=user_diet_plan,
     )
     response_res = response_service(response_req)
     execution_steps.append(

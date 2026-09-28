@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
@@ -8,6 +8,7 @@ import HelpModal from './components/HelpModal';
 import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import DietPlannerPage from './pages/DietPlannerPage';
 import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
 import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown } from 'lucide-react';
@@ -348,6 +349,8 @@ function ChatDashboard({ user, onSignOut }) {
 }
 
 function ProtectedRoute({ children, user, isAuthChecking }) {
+  const location = useLocation();
+
   if (isAuthChecking) {
     return (
       <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F9F5', color: '#1B241D' }}>
@@ -360,7 +363,7 @@ function ProtectedRoute({ children, user, isAuthChecking }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return children;
@@ -427,6 +430,22 @@ export default function App() {
         <Route
           path="/register"
           element={<RegisterPage onRegisterSuccess={(userData) => setUser(userData)} />}
+        />
+        <Route
+          path="/diet-plan"
+          element={
+            <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
+              <DietPlannerPage user={user} onSignOut={handleSignOut} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/diet-planner"
+          element={
+            <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
+              <DietPlannerPage user={user} onSignOut={handleSignOut} />
+            </ProtectedRoute>
+          }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -23,7 +23,8 @@ import {
   X,
   User,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  Utensils
 } from 'lucide-react';
 
 export default function LandingPage({ user, onSignOut }) {
@@ -170,6 +171,7 @@ export default function LandingPage({ user, onSignOut }) {
           <nav className="nav-links desktop-only">
             <a href="#features">Features</a>
             <a href="#architecture">Architecture</a>
+            <a href="/diet-plan" onClick={(e) => { e.preventDefault(); navigate('/diet-plan'); }} style={{ color: '#10b981', fontWeight: 600 }}>Diet Planner</a>
             <a href="#demo">Live Demo</a>
             <a href="#faq">FAQ</a>
           </nav>
@@ -255,6 +257,7 @@ export default function LandingPage({ user, onSignOut }) {
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
           <div className="mobile-dropdown">
+            <a href="/diet-plan" onClick={(e) => { e.preventDefault(); setMobileMenuOpen(false); navigate('/diet-plan'); }} style={{ color: '#10b981', fontWeight: 600 }}>Diet & Nutrition Planner</a>
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#architecture" onClick={() => setMobileMenuOpen(false)}>Architecture</a>
             <a href="#demo" onClick={() => setMobileMenuOpen(false)}>Live Demo</a>
@@ -316,6 +319,9 @@ export default function LandingPage({ user, onSignOut }) {
           <div className="hero-ctas">
             <button className="btn-primary hero-btn" onClick={handleTryClick}>
               <Zap size={18} /> {user ? 'Go to Chatbot' : 'Try EviBite AI Free'}
+            </button>
+            <button className="btn-secondary hero-btn" onClick={() => navigate('/diet-plan')} style={{ borderColor: '#10b981', color: '#10b981' }}>
+              <Utensils size={18} /> Diet Planner
             </button>
             <a href="#demo" className="btn-outline hero-btn">
               <Sparkles size={18} /> Explore Prompts Demo
