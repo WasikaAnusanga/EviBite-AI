@@ -33,6 +33,39 @@ export async function sendChatMessage(message, sessionId = null, userId = null) 
 }
 
 /**
+ * Upload PDF recipe/doc to EviBite AI multi-agent orchestrator
+ * @param {File} file
+ * @param {string} message 
+ * @param {string|null} sessionId 
+ * @param {string|null} userId 
+ * @returns {Promise<Object>}
+ */
+export async function sendChatPdf(file, message = '', sessionId = null, userId = null) {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (message) formData.append('message', message);
+    if (sessionId) formData.append('session_id', sessionId);
+    if (userId) formData.append('user_id', userId);
+
+    const response = await fetch(`${API_BASE_URL}/chat/upload-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Server error (${response.status})`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('PDF upload API call failed:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch all chat sessions for a specific user from MongoDB
  * @param {string} userId 
  */

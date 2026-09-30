@@ -116,9 +116,14 @@ def _generate_llm_response(
             turns_fmt.append(f"{role_label}: {turn.get('content')}")
         history_str = "\n".join(turns_fmt)
 
-    # Format user's active diet plan context if available
+    is_doc_upload = "📄 [" in query or "Uploaded Recipe" in query or "Uploaded Document" in query
+    is_asking_about_diet = any(
+        w in query.lower() for w in ["diet plan", "my diet", "my plan", "my goals", "weight goal", "daily calories", "my macros", "fit in my plan", "fits my plan"]
+    )
+
+    # Format user's active diet plan context ONLY if user explicitly asked or if it's NOT a document upload
     diet_plan_str = ""
-    if user_diet_plan:
+    if user_diet_plan and (is_asking_about_diet or not is_doc_upload):
         daily = user_diet_plan.get("daily_targets") or {}
         profile = user_diet_plan.get("profile") or {}
         meals = user_diet_plan.get("meals") or []
@@ -149,7 +154,7 @@ User's Active Personalized Diet Plan (Saved in Profile):
 
     prompt = f"""You are EviBite AI, an intelligent, friendly supermarket food product, nutrition, and diet planning assistant.
 
-{diet_plan_str if diet_plan_str else "User Diet Plan Context: (The user has not created a diet plan yet. If they ask about their diet plan, kindly advise them to use the 'Diet Planner' in the top navigation to generate one in seconds.)"}
+{diet_plan_str if diet_plan_str else "User Diet Plan Context: (Not applicable for this specific query.)"}
 
 Recent Conversation History:
 {history_str if history_str else "(New Conversation)"}
@@ -164,14 +169,16 @@ Safety Analysis Findings:
 {json.dumps(findings, indent=2)}
 
 Instructions:
-1. User Diet Plan Awareness: You have direct access to the user's active diet plan above!
-   - If the user asks about their diet plan, daily calorie budget, macronutrient targets, planned meals, or dietary goal, answer directly, accurately, and encouragingly using the details from their saved plan.
-   - If the user asks whether a specific product (e.g., Nutella, bread, milk) fits into their diet plan, evaluate it against their target calories, macronutrients, declared allergies, and dietary lifestyle (e.g. Vegetarian/Vegan/Halal).
-2. Multi-turn conversation memory: Pay attention to prior turns! If the user uses pronouns like "its", "it", "this product", or asks follow-ups, refer directly to the product discussed in previous turns.
-3. Directly answer the user's specific question clearly with bullet points, ingredients, allergen warnings, and nutrient details per 100g.
-4. Clean formatting: Never output raw technical bracketed prefixes like [Product Name].
-5. Conversational remarks & Gratitude: If the user sends greetings, gratitude, or casual remarks, respond warmly and naturally.
-6. Keep the tone helpful, concise, professional, and grounded in supermarket food products.
+1. STRICT FOCUS FOR UPLOADED FILES/DOCUMENTS:
+   - If the user uploaded a document or PDF (query contains '📄 [Uploaded Recipe PDF...]'), focus EXCLUSIVELY on reading, parsing, and answering the user's specific request about that uploaded file.
+   - Do NOT talk about, mention, or bring up the user's diet plan, weight goals, daily calorie targets, or personal profile unless the user specifically asked about their diet plan in their prompt.
+2. User Diet Plan Awareness:
+   - ONLY reference or analyze the user's saved diet plan IF the user explicitly asks about their diet plan, calories, macros, or asks whether a food fits into their diet plan.
+3. Multi-turn conversation memory: Pay attention to prior turns! If the user uses pronouns like "its", "it", "this product", or asks follow-ups, refer directly to the product or document discussed in previous turns.
+4. Directly answer the user's specific question clearly with bullet points, ingredients, allergen warnings, and product details.
+5. Clean formatting: Never output raw technical bracketed prefixes like [Product Name].
+6. Conversational remarks & Gratitude: If the user sends greetings, gratitude, or casual remarks, respond warmly and naturally.
+7. Keep the tone helpful, concise, professional, and grounded strictly in the provided document / supermarket food products.
 """
 
     try:
