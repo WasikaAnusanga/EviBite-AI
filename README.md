@@ -1,6 +1,6 @@
 # EviBite AI 🥗
 
-**Multi-Agent Supermarket Product Intelligence & Dietary Planning System (v2.4)**  
+**Multi-Agent Supermarket Product Intelligence & Dietary Planning System (v2.5)**  
 *IT3041 – Information Retrieval & Web Analytics*
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
@@ -11,16 +11,17 @@
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-3.1_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
 [![Open Food Facts](https://img.shields.io/badge/Data-Open_Food_Facts-FF6600)](https://world.openfoodfacts.org)
 
-EviBite AI is an end-to-end multi-agent AI system designed to audit packaged supermarket goods, analyze allergens and nutritional parameters, provide grounded chatbot consultations, and synthesize clinically calibrated personalized diet plans grounded in regional supermarket inventories.
+EviBite AI is an end-to-end multi-agent AI system designed to audit packaged supermarket goods, analyze allergens and nutritional parameters, process PDF recipes and documents, provide grounded chatbot consultations, and synthesize clinically calibrated personalized diet plans grounded in regional supermarket inventories.
 
 ---
 
 ## 1. System Overview & Core Capabilities
 
-EviBite AI addresses two fundamental challenges in modern grocery shopping and dietary management:
+EviBite AI addresses key challenges in modern grocery shopping, recipe management, and dietary health:
 1. **Product Intelligence & Safety**: Instant allergen conflict screening, ingredient verification, and grounded nutritional evaluations across global and regional supermarket products.
 2. **Personalized Diet Planning**: Tailoring clinical dietitian strategies to individual biometric energy needs (Mifflin-St Jeor BMR, TDEE, WHO BMI) and structuring meals exclusively with verified, regionally available supermarket goods (Sri Lanka, United Kingdom, United States, India, Global).
-3. **Cross-Agent Context Sharing**: The chatbot assistant directly accesses the user's active diet plan to answer questions regarding daily calorie limits, macro targets, and product compatibility in real time.
+3. **PDF Recipe & Document Ingestion**: Upload PDF recipes or menu documents directly into the chatbot to extract ingredients, match available food products from inventory, screen for allergen safety, and generate buying recommendations.
+4. **Cross-Agent Context Sharing & Strict Scope Guardrails**: The chatbot assistant accesses saved user diet plans for diet-related queries while strictly enforcing document-isolation mode for uploaded PDF recipes to avoid unsolicited commentary.
 
 ---
 
@@ -30,8 +31,8 @@ EviBite AI is powered by **five cooperating AI agents**, coordinated by an Orche
 
 ```mermaid
 graph TD
-    Client["User / Client App (React + Vite)"] -->|POST /api/chat| Security["Cross-Cutting Security & Sanitization Layer"]
-    Security -->|Sanitized Request| Orchestrator["Central Orchestrator Engine"]
+    Client["User / Client App (React + Vite)"] -->|POST /api/chat or /upload-pdf| Security["Cross-Cutting Security & Sanitization Layer"]
+    Security -->|Sanitized Request & PDF Text| Orchestrator["Central Orchestrator Engine"]
 
     subgraph Agent1["Agent 1: Triage & Routing"]
         TriageService["Triage Service"]
@@ -89,7 +90,7 @@ graph TD
         MongoChats[("chat_sessions")]
     end
 
-    Orchestrator -->|1. Parse Query & Route| Agent1
+    Orchestrator -->|1. Parse Query / Recipe Text & Route| Agent1
     Agent1 -->|Triage Output & Route| Orchestrator
     
     Orchestrator -->|2. Fetch Product Candidates| Agent2
@@ -112,12 +113,12 @@ graph TD
 ## 3. The 5 Specialized Agents
 
 ### Agent 1 – Triage & Routing Agent
-- **Responsibilities**: Intent classification (`allergen_query`, `nutrition_query`, `dietary_query`, `comparison`, `product_search`, `barcode_lookup`, `recommendation`), entity extraction (product, brand, barcode, nutrients, allergens), and pronoun context resolution.
+- **Responsibilities**: Intent classification (`allergen_query`, `nutrition_query`, `dietary_query`, `comparison`, `product_search`, `barcode_lookup`, `recommendation`), entity extraction (product, brand, barcode, nutrients, allergens, recipe ingredients), and pronoun context resolution.
 - **Risk Escalation**: Automatically assigns `RiskLevel.HIGH` to allergen inquiries to guarantee full analytical evaluation.
-- **Diet Plan Query Awareness**: Identifies personal diet queries (e.g., *"What is my daily calorie target?"*) and routes them directly with the user's active diet plan.
+- **Diet Plan & Recipe Query Awareness**: Identifies personal diet queries or uploaded recipe documents and routes them with appropriate scope flags.
 
 ### Agent 2 – Product Information Retrieval Agent
-- **Responsibilities**: Multi-source candidate retrieval using exact barcode lookup, fuzzy product name search, and category matching.
+- **Responsibilities**: Multi-source candidate retrieval using exact barcode lookup, fuzzy product name search, category matching, and recipe ingredient mapping.
 - **Regional Supermarket Catalogs**: Genuine regional product databases for:
   - 🇱🇰 **Sri Lanka**: Keells, Cargills, Elephant House, Maliban, Munchee, MD, Kotmale, Highland.
   - 🇬🇧 **United Kingdom**: Tesco, Sainsbury's, Waitrose, M&S.
@@ -133,7 +134,7 @@ graph TD
 ### Agent 4 – Recommendation & Response Agent
 - **Responsibilities**: Evidence-grounded natural language synthesis using **Gemini Flash**.
 - **Multi-Turn Memory**: Remembers last-discussed products and tracks follow-up pronoun queries (*"what is its sugar content?"*).
-- **Diet Plan Context Integration**: Dynamically assesses whether checked products fit into the user's active diet plan and declared allergies.
+- **Document Scope Guardrails**: Isolates uploaded PDF recipe queries to focus strictly on the document text without injecting unsolicited profile/diet plan commentary.
 
 ### Agent 5 – Diet & Nutrition Planning Agent
 - **Biometric Computation**: Calculates BMR via the Mifflin-St Jeor formula, determines TDEE based on activity levels (Sedentary to Athlete), and categorizes BMI per WHO guidelines.
@@ -147,6 +148,8 @@ graph TD
 
 | Feature | Description |
 |---|---|
+| 📄 **PDF Recipe & Document Ingestion** | Upload PDF recipe files directly into the chatbot to extract ingredients, match available supermarket products, check allergen safety, and generate buying lists. |
+| 🎯 **Strict Document Scope Mode** | Automatically isolates document queries to focus exclusively on file contents without unsolicited profile/diet plan commentary. |
 | 🔐 **Mandatory User Authentication** | Protected `/diet-plan` routes requiring login/registration with automatic post-login redirects. |
 | 🌍 **Regional Market Adaptation** | Tailored to local supermarket supplies across Sri Lanka, UK, US, India, and Global. |
 | ⚡ **Sub-10s Diet Plan Generation** | Optimized token budgets and cooldown-protected DB connections for rapid plan synthesis. |
@@ -159,6 +162,7 @@ graph TD
 ## 5. Technology Stack
 
 - **Backend**: Python 3.11+, FastAPI, Uvicorn, Pydantic v2
+- **Document Processing**: `pypdf`, `python-multipart`
 - **AI / LLM**: Google Gemini API (`gemini-3.1-flash-lite`, `gemini-2.5-flash`), `google-genai` SDK
 - **Database**: MongoDB Atlas (`pymongo`, `certifi`) with in-memory resilient fallback
 - **Information Retrieval**: Open Food Facts REST API + Regional Supermarket Catalogs
@@ -180,7 +184,7 @@ EviBite-AI/
 │   │   │   ├── recommendation_response/     # Agent 4: Response Synthesis
 │   │   │   └── diet_planning_agent/         # Agent 5: Diet & Nutrition Planning
 │   │   ├── api/
-│   │   │   └── routes/                      # FastAPI endpoints (chat, diet_plan, auth)
+│   │   │   └── routes/                      # FastAPI endpoints (chat, upload-pdf, diet_plan, auth)
 │   │   ├── data/                            # Regional product catalogs (LK, UK, US, IN)
 │   │   ├── db/                              # MongoDB repositories (chat, diet plans, users)
 │   │   ├── models/                          # Shared Pydantic message contracts
@@ -190,9 +194,9 @@ EviBite-AI/
 │   │   └── main.py                          # FastAPI application entry point
 ├── frontend/
 │   ├── src/
-│   │   ├── components/                      # Chat, landing, modals, rationale cards
+│   │   ├── components/                      # Chat, ChatInput (PDF attach), landing, modals, rationale cards
 │   │   ├── pages/                           # DietPlannerPage, LoginPage, RegisterPage
-│   │   ├── services/                        # API fetch clients
+│   │   ├── services/                        # API fetch clients (chat, sendChatPdf, diet plans, auth)
 │   │   ├── App.jsx                          # Main router & chat session manager
 │   │   └── index.css                        # Design system & print stylesheets
 ├── tests/                                   # Pytest test suite
@@ -264,6 +268,7 @@ npm run dev
 
 ### Chat & Orchestration
 - `POST /api/chat`: Executes multi-agent chat pipeline (`Triage` $\rightarrow$ `Retrieval` $\rightarrow$ `Analysis` $\rightarrow$ `Response`).
+- `POST /api/chat/upload-pdf`: Uploads a PDF document/recipe, extracts page text via `pypdf`, and routes through the multi-agent pipeline to generate an inventory-grounded shopping list.
 - `GET /api/chat/sessions`: Fetches all chat sessions for a user.
 - `GET /api/chat/sessions/{id}`: Loads history for a specific chat session.
 - `DELETE /api/chat/sessions/{id}`: Deletes a session.
