@@ -6605,4 +6605,78 @@ input:checked+.slider:before {
     padding-top: 8px;
     border-top: 1px dashed #e2e8f0;
   }
+}
+
+/* File Attachment & Chat Input Styles */
+.file-preview-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(70, 128, 58, 0.1);
+  border: 1px solid rgba(70, 128, 58, 0.3);
+  border-radius: var(--radius-sm, 8px);
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #46803A;
+}
+
+.file-badge-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-badge-info .file-name {
+  font-weight: 600;
+  color: #1B241D;
+}
+
+.file-badge-info .file-size {
+  color: #626E63;
+  font-size: 11px;
+}
+
+.remove-file-btn {
+  background: transparent;
+  border: none;
+  color: #626E63;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.remove-file-btn:hover {
+  background: rgba(180, 35, 24, 0.12);
+  color: #B42318;
+}
+
+.attach-btn {
+  background: transparent;
+  border: none;
+  color: #626E63;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: #F0F6EC;
+  color: #46803A;
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

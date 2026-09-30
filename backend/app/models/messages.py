@@ -15,7 +15,7 @@ class AgentMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=1000)
+    message: str = Field(min_length=1, max_length=15000)
     session_id: str | None = Field(default=None, max_length=100)
     user_id: str | None = Field(default=None, max_length=100)
 

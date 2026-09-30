@@ -9,7 +9,7 @@ import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DietPlannerPage from './pages/DietPlannerPage';
-import { sendChatMessage, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
+import { sendChatMessage, sendChatPdf, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
 import logoImg from './logo/logo.png';
 import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown } from 'lucide-react';
 
@@ -120,20 +120,25 @@ function ChatDashboard({ user, onSignOut }) {
     });
   };
 
-  const handleSendMessage = async (userText) => {
+  const handleSendMessage = async (userText, file = null) => {
+    const displayMessage = file 
+      ? `📄 Attached Recipe PDF: ${file.name}${userText ? `\nNote: ${userText}` : ''}`
+      : userText;
+
     const userMsg = {
       id: `msg-${Date.now()}`,
       sender: 'user',
-      text: userText,
+      text: displayMessage,
       timestamp: new Date().toISOString(),
     };
 
     setSessions(prev => prev.map(s => {
       if (s.id === currentSessionId) {
         const isFirstMsg = s.messages.length === 0;
+        const titleText = file ? `Recipe: ${file.name}` : userText;
         return {
           ...s,
-          title: isFirstMsg ? (userText.length > 28 ? userText.substring(0, 28) + '...' : userText) : s.title,
+          title: isFirstMsg ? (titleText.length > 28 ? titleText.substring(0, 28) + '...' : titleText) : s.title,
           messages: [...s.messages, userMsg],
         };
       }
@@ -143,7 +148,12 @@ function ChatDashboard({ user, onSignOut }) {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userText, currentSessionId, userId);
+      let response;
+      if (file) {
+        response = await sendChatPdf(file, userText, currentSessionId, userId);
+      } else {
+        response = await sendChatMessage(userText, currentSessionId, userId);
+      }
       
       const aiMsg = {
         id: `msg-ai-${Date.now()}`,
@@ -168,7 +178,7 @@ function ChatDashboard({ user, onSignOut }) {
       const errorMsg = {
         id: `msg-err-${Date.now()}`,
         sender: 'ai',
-        text: `⚠️ Could not reach EviBite AI backend: ${error.message}. Please make sure the backend API is running on http://localhost:8000.`,
+        text: `⚠️ ${error.message}`,
         timestamp: new Date().toISOString(),
       };
 

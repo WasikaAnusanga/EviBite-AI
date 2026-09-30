@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
+import io
+import pypdf
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from typing import Optional
 
 from backend.app.models.messages import ChatRequest, ChatResponse
@@ -31,6 +33,75 @@ def chat_endpoint(request: ChatRequest) -> ChatResponse:
     request.message = result.cleaned_message
 
     return run_orchestration(request)
+
+
+@router.post("/chat/upload-pdf", response_model=ChatResponse)
+async def upload_pdf_chat_endpoint(
+    file: UploadFile = File(...),
+    message: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+) -> ChatResponse:
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Please sign in to chat with EviBite AI.",
+        )
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file format. Please upload a PDF file (.pdf).",
+        )
+
+    try:
+        pdf_bytes = await file.read()
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        extracted_text = ""
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                extracted_text += t + "\n"
+        
+        extracted_text = extracted_text.strip()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read PDF document: {str(e)}",
+        )
+
+    if not extracted_text:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded PDF contained no extractable text. Please ensure it is not an image-only or password-protected PDF.",
+        )
+
+    # Limit extracted text to 10,000 characters to keep context clean
+    trimmed_pdf = extracted_text[:10000]
+    user_instruction = (message or "").strip() or "Please analyze this uploaded document/recipe and identify all required ingredients and the matching food products available in our inventory that I should buy."
+
+    formatted_query = (
+        f"📄 [Uploaded Recipe PDF: {file.filename}]\n"
+        f"--- Document Recipe Text ---\n"
+        f"{trimmed_pdf}\n"
+        f"----------------------------\n"
+        f"User Prompt: {user_instruction}"
+    )
+
+    result = sanitize_message(formatted_query)
+    if not result.is_safe:
+        raise HTTPException(
+            status_code=400,
+            detail="Your document message could not be processed due to unsafe content.",
+        )
+
+    req = ChatRequest(
+        message=result.cleaned_message,
+        session_id=session_id,
+        user_id=user_id,
+    )
+
+    return run_orchestration(req)
 
 
 @router.get("/chat/sessions")
