@@ -7,6 +7,7 @@ from backend.app.models.messages import ChatRequest, ChatResponse
 from backend.app.orchestration.orchestrator import run_orchestration
 from backend.app.security.input_sanitization import sanitize_message
 from backend.app.db.chat_repository import chat_repo
+from backend.app.db.user_repository import user_repo
 from backend.app.orchestration.session_memory import session_memory
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -14,10 +15,14 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest) -> ChatResponse:
-    if not request.user_id:
+    user_id = request.user_id or "guest_user"
+
+    # Enforce Free plan rate limit (10 chats per day)
+    allowed, count, remaining = user_repo.check_and_increment_daily_chat(user_id)
+    if not allowed:
         raise HTTPException(
-            status_code=401,
-            detail="Authentication required. Please sign in to chat with EviBite AI.",
+            status_code=429,
+            detail="Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for unlimited messages!",
         )
 
     result = sanitize_message(request.message)
@@ -42,10 +47,16 @@ async def upload_pdf_chat_endpoint(
     session_id: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
 ) -> ChatResponse:
-    if not user_id:
+    clean_user_id = user_id or "guest_user"
+
+    # Check Plan Tier: PDF Upload is locked for Free Tier
+    user_doc = user_repo.find_by_id(clean_user_id)
+    user_tier = user_doc.get("plan_tier", "free") if user_doc else "free"
+
+    if user_tier == "free":
         raise HTTPException(
-            status_code=401,
-            detail="Authentication required. Please sign in to chat with EviBite AI.",
+            status_code=403,
+            detail="PDF Recipe Upload is a Pro & Ultimate feature. Upgrade to Pro Plan to unlock recipe file uploads!",
         )
 
     if not file.filename.lower().endswith(".pdf"):

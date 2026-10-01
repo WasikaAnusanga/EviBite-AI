@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, MessageSquare, ShieldCheck, Sparkles, Settings, LogOut, 
-  ChevronRight, ChevronUp, User, Sliders, HelpCircle, LogIn, UserPlus 
+  ChevronRight, ChevronUp, User, Sliders, HelpCircle, LogIn, UserPlus, Lock 
 } from 'lucide-react';
 
 import logoImg from '../logo/logo.png';
@@ -17,6 +17,8 @@ export default function Sidebar({
   onSignOut,
   onOpenSettings,
   onOpenHelp,
+  planTier = 'free',
+  onOpenPricing,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -41,6 +43,12 @@ export default function Sidebar({
     return name.substring(0, 2).toUpperCase();
   };
 
+  const getPlanBadgeText = (tier) => {
+    if (tier === 'ultimate') return 'Ultimate';
+    if (tier === 'pro') return 'Pro';
+    return 'Free';
+  };
+
   return (
     <aside className="sidebar">
       {/* Top Header & Brand */}
@@ -57,11 +65,28 @@ export default function Sidebar({
         <span>New Chat</span>
       </button>
 
-      {/* Diet & Nutrition Planner Button */}
-      <Link to="/diet-plan" className="sidebar-diet-btn" style={{ textDecoration: 'none' }}>
-        <Sparkles size={16} className="text-emerald" />
-        <span>Diet & Nutrition Planner</span>
-      </Link>
+      {/* Diet & Nutrition Planner Button with Lock Pill */}
+      {planTier === 'ultimate' ? (
+        <Link to="/diet-plan" className="sidebar-diet-btn" style={{ textDecoration: 'none' }}>
+          <Sparkles size={16} className="text-emerald" />
+          <span>Diet & Nutrition Planner</span>
+        </Link>
+      ) : (
+        <button
+          type="button"
+          className="sidebar-diet-btn sidebar-diet-locked"
+          onClick={() => onOpenPricing && onOpenPricing('ultimate')}
+          title="Diet Planner requires Ultimate Plan (Click to Upgrade)"
+        >
+          <div className="diet-btn-left">
+            <Sparkles size={16} className="text-emerald" />
+            <span>Diet Planner</span>
+          </div>
+          <span className="tier-lock-pill">
+            <Lock size={11} /> Ultimate
+          </span>
+        </button>
+      )}
 
       {/* Recent Chats Navigation */}
       <div className="sidebar-nav">
@@ -98,25 +123,26 @@ export default function Sidebar({
 
       {/* Bottom Left Corner User Profile & Popup Menu */}
       <div className="sidebar-user-container" ref={menuRef}>
-        {/* Popup Menu (Appears above the user profile bar when clicked) */}
+        {/* Popup Menu */}
         {isMenuOpen && user && (
           <div className="profile-popup-menu">
-            {/* Top User Card inside popup */}
             <div className="popup-user-card">
               <div className="popup-avatar">
                 {getInitials(user.name)}
               </div>
               <div className="popup-user-details">
                 <span className="popup-user-name">{user.name}</span>
-                <span className="popup-plan-tag">Plus</span>
+                <span className={`popup-plan-tag ${planTier}`}>
+                  {getPlanBadgeText(planTier)}
+                </span>
               </div>
             </div>
 
             <div className="popup-menu-divider" />
 
-            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('general'); }}>
-              <Sparkles size={16} />
-              <span>Upgrade plan</span>
+            <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenPricing) onOpenPricing(); }}>
+              <Sparkles size={16} color="#46803A" />
+              <span>Upgrade / Manage Plan</span>
             </button>
 
             <button className="popup-menu-item" onClick={() => { setIsMenuOpen(false); if (onOpenSettings) onOpenSettings('allergens'); }}>
@@ -150,7 +176,7 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* User Profile Bar at Bottom Left Corner */}
+        {/* User Profile Bar */}
         {user ? (
           <button
             className={`sidebar-user-profile-bar ${isMenuOpen ? 'active' : ''}`}
@@ -161,7 +187,9 @@ export default function Sidebar({
             </div>
             <div className="user-profile-text">
               <span className="user-profile-name">{user.name}</span>
-              <span className="user-profile-sub">Plus</span>
+              <span className={`user-profile-sub ${planTier}`}>
+                {getPlanBadgeText(planTier)} Plan
+              </span>
             </div>
             <ChevronRight size={16} className={`user-bar-chevron ${isMenuOpen ? 'open' : ''}`} />
           </button>

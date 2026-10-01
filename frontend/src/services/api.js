@@ -287,3 +287,27 @@ export async function deleteUserDietPlan(planId, userId = null) {
   }
 }
 
+/**
+ * Update subscription plan tier for a user (free, pro, ultimate)
+ * @param {string} userId 
+ * @param {string} planTier 
+ * @returns {Promise<Object>}
+ */
+export async function updateUserPlan(userId, planTier) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/update-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, plan_tier: planTier }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Could not update plan tier');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed updating plan tier:', error);
+    throw error;
+  }
+}
+

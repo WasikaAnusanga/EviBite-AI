@@ -85,12 +85,7 @@ export default function ChatMessage({ message }) {
 
   const triageData = message.triage_output || {};
   const executionSteps = message.execution_steps || [];
-  const riskLevel = triageData.risk_level || 'LOW';
   const extractionSource = triageData.extraction_source || 'llm';
-
-  const riskClass = 
-    riskLevel === 'HIGH' ? 'badge-risk-high' :
-    riskLevel === 'MEDIUM' ? 'badge-risk-medium' : 'badge-risk-low';
 
   return (
     <div className="message-row">
@@ -123,9 +118,6 @@ export default function ChatMessage({ message }) {
                 <span className="badge badge-source">
                   <Cpu size={10} style={{ marginRight: 4, display: 'inline' }} />
                   {extractionSource}
-                </span>
-                <span className={`badge ${riskClass}`}>
-                  Risk: {riskLevel}
                 </span>
                 {showInsights ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </div>

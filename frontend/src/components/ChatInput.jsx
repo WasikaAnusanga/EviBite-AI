@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, FileText, X } from 'lucide-react';
+import { Send, Paperclip, FileText, X, Lock, Sparkles } from 'lucide-react';
 
-export default function ChatInput({ onSendMessage, disabled }) {
+export default function ChatInput({ onSendMessage, disabled, planTier = 'free', onOpenPricing }) {
   const [text, setText] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const textareaRef = useRef(null);
@@ -23,6 +23,14 @@ export default function ChatInput({ onSendMessage, disabled }) {
       }
       setSelectedFile(file);
     }
+  };
+
+  const handleAttachClick = () => {
+    if (planTier === 'free') {
+      if (onOpenPricing) onOpenPricing('pro');
+      return;
+    }
+    fileInputRef.current?.click();
   };
 
   const removeFile = () => {
@@ -63,6 +71,8 @@ export default function ChatInput({ onSendMessage, disabled }) {
           </button>
         </div>
       )}
+
+
       <form onSubmit={handleSubmit} className="input-box">
         <input
           type="file"
@@ -73,17 +83,30 @@ export default function ChatInput({ onSendMessage, disabled }) {
         />
         <button
           type="button"
-          className="attach-btn"
-          onClick={() => fileInputRef.current?.click()}
+          className={`attach-btn ${planTier === 'free' ? 'locked-attach' : ''}`}
+          onClick={handleAttachClick}
           disabled={disabled}
-          title="Upload Recipe PDF"
+          title={planTier === 'free' ? 'PDF Upload requires Pro Plan (Click to Upgrade)' : 'Upload Recipe PDF'}
         >
-          <Paperclip size={18} />
+          {planTier === 'free' ? (
+            <div className="locked-icon-wrapper">
+              <Paperclip size={18} />
+              <Lock size={10} className="lock-overlay-icon" />
+            </div>
+          ) : (
+            <Paperclip size={18} />
+          )}
         </button>
         <textarea
           ref={textareaRef}
           className="chat-textarea"
-          placeholder={selectedFile ? "Ask a question about this recipe PDF, or press Send..." : "Ask EviBite AI about any food product, allergens, or attach a recipe PDF..."}
+          placeholder={
+            selectedFile
+              ? "Ask a question about this recipe PDF, or press Send..."
+              : planTier === 'free'
+              ? "Ask EviBite AI about any food product, ingredients, or allergens..."
+              : "Ask EviBite AI about food products, or attach a recipe PDF..."
+          }
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
