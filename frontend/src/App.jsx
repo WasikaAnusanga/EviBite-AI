@@ -9,20 +9,52 @@ import LandingPage from './components/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DietPlannerPage from './pages/DietPlannerPage';
-import { sendChatMessage, sendChatPdf, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession } from './services/api';
+import PricingModal from './components/PricingModal';
+import { sendChatMessage, sendChatPdf, getCurrentUser, fetchUserSessions, fetchSessionHistory, deleteChatSession, updateUserPlan } from './services/api';
 import logoImg from './logo/logo.png';
-import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown } from 'lucide-react';
+import { Sparkles, ShieldCheck, HeartPulse, Scale, Search, LogIn, UserPlus, LogOut, ArrowRight, ArrowLeft, User, ChevronDown, Lock, AlertTriangle } from 'lucide-react';
 
-function ChatDashboard({ user, onSignOut }) {
+function ChatDashboard({ user, onSignOut, onUpdateUser }) {
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [pricingTargetTier, setPricingTargetTier] = useState('free');
   const [settingsTab, setSettingsTab] = useState('general');
+  const [isLimitReached, setIsLimitReached] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const userId = user ? (user.id || user.email) : null;
+  const userId = user ? (user.id || user.email) : 'guest_user';
+  const planTier = user?.plan_tier || 'free';
+  const isLimitActive = isLimitReached || (user?.daily_msg_count >= 10);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.openPricing) {
+      handleOpenPricing(location.state?.targetTier || 'ultimate');
+    }
+  }, [location]);
+
+  const handleOpenPricing = (targetTier = null) => {
+    setPricingTargetTier(targetTier || planTier);
+    setIsPricingOpen(true);
+  };
+
+  const handleSelectTier = async (newTier) => {
+    try {
+      if (user && user.id) {
+        const updated = await updateUserPlan(user.id, newTier);
+        if (onUpdateUser) onUpdateUser({ ...user, plan_tier: newTier });
+      } else {
+        if (onUpdateUser) onUpdateUser({ ...(user || {}), plan_tier: newTier });
+      }
+    } catch (err) {
+      console.error('Plan update failed:', err);
+    }
+  };
 
   // Load user chat sessions from MongoDB when user updates / logs in
   useEffect(() => {
@@ -175,6 +207,10 @@ function ChatDashboard({ user, onSignOut }) {
         return s;
       }));
     } catch (error) {
+      if (error.message?.includes('Limit Reached') || error.message?.includes('10/10')) {
+        setIsLimitReached(true);
+      }
+
       const errorMsg = {
         id: `msg-err-${Date.now()}`,
         sender: 'ai',
@@ -238,6 +274,8 @@ function ChatDashboard({ user, onSignOut }) {
           setIsSettingsOpen(true);
         }}
         onOpenHelp={() => setIsHelpOpen(true)}
+        planTier={planTier}
+        onOpenPricing={handleOpenPricing}
       />
 
       <main className="chat-stage">
@@ -255,19 +293,59 @@ function ChatDashboard({ user, onSignOut }) {
             <span className="tag-badge">Multi-Agent Intelligence</span>
           </div>
 
-          {!user && (
-            <div className="header-auth-group">
-              <Link to="/login" className="auth-trigger-btn signin">
-                <LogIn size={16} />
-                <span>Sign In</span>
-              </Link>
-              <Link to="/register" className="auth-trigger-btn register">
-                <UserPlus size={16} />
-                <span>Register</span>
-              </Link>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {planTier !== 'free' && (
+              <button
+                type="button"
+                className={`header-tier-pill ${planTier}`}
+                onClick={() => handleOpenPricing()}
+                title="Click to view subscription plans & upgrade"
+              >
+                <Sparkles size={13} />
+                <span>{planTier === 'ultimate' ? '👑 Ultimate' : '⚡ Pro Plan'}</span>
+              </button>
+            )}
+
+            {!user && (
+              <div className="header-auth-group">
+                <Link to="/login" className="auth-trigger-btn signin">
+                  <LogIn size={16} />
+                  <span>Sign In</span>
+                </Link>
+                <Link to="/register" className="auth-trigger-btn register">
+                  <UserPlus size={16} />
+                  <span>Register</span>
+                </Link>
+              </div>
+            )}
+          </div>
         </header>
+
+        {planTier === 'free' && (
+          <div className={`top-free-tier-banner ${isLimitActive ? 'limit-reached' : ''}`}>
+            <div className="banner-left-info">
+              {isLimitActive ? (
+                <AlertTriangle size={16} color="#DC2626" className="banner-sparkle-icon" />
+              ) : (
+                <Sparkles size={15} color="#9A6700" className="banner-sparkle-icon" />
+              )}
+              <span>
+                {isLimitActive ? (
+                  <><strong>Daily Limit Reached:</strong> Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for unlimited messages!</>
+                ) : (
+                  <><strong>Starter Plan:</strong> 10 daily chats limit • PDF Recipe Upload & Diet Planner Locked</>
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenPricing()}
+              className="upgrade-link-btn"
+            >
+              ⚡ Upgrade Plan
+            </button>
+          </div>
+        )}
 
         <div className="messages-container">
           {messages.length === 0 ? (
@@ -340,7 +418,12 @@ function ChatDashboard({ user, onSignOut }) {
           <div ref={messagesEndRef} />
         </div>
 
-        <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          disabled={isLoading}
+          planTier={planTier}
+          onOpenPricing={handleOpenPricing}
+        />
       </main>
 
       <SettingsModal
@@ -353,6 +436,14 @@ function ChatDashboard({ user, onSignOut }) {
       <HelpModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      <PricingModal
+        isOpen={isPricingOpen}
+        onClose={() => setIsPricingOpen(false)}
+        currentTier={planTier}
+        targetTier={pricingTargetTier}
+        onSelectTier={handleSelectTier}
       />
     </div>
   );
@@ -374,6 +465,31 @@ function ProtectedRoute({ children, user, isAuthChecking }) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+
+function UltimateProtectedRoute({ children, user, isAuthChecking }) {
+  const location = useLocation();
+
+  if (isAuthChecking) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F9F5', color: '#1B241D' }}>
+        <div style={{ textAlign: 'center' }}>
+          <img src={logoImg} alt="EviBite AI" style={{ width: '48px', height: '48px', marginBottom: '12px', objectFit: 'contain' }} />
+          <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>Loading EviBite AI...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user.plan_tier !== 'ultimate') {
+    return <Navigate to="/chat" state={{ openPricing: true, targetTier: 'ultimate' }} replace />;
   }
 
   return children;
@@ -418,6 +534,11 @@ export default function App() {
     setUser(null);
   };
 
+  const handleUpdateUser = (updatedUserData) => {
+    setUser(updatedUserData);
+    localStorage.setItem('evibite_user', JSON.stringify(updatedUserData));
+  };
+
   return (
     <BrowserRouter>
       <Routes>
@@ -429,7 +550,7 @@ export default function App() {
           path="/chat"
           element={
             <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
-              <ChatDashboard user={user} onSignOut={handleSignOut} />
+              <ChatDashboard user={user} onSignOut={handleSignOut} onUpdateUser={handleUpdateUser} />
             </ProtectedRoute>
           }
         />
@@ -444,17 +565,17 @@ export default function App() {
         <Route
           path="/diet-plan"
           element={
-            <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
+            <UltimateProtectedRoute user={user} isAuthChecking={isAuthChecking}>
               <DietPlannerPage user={user} onSignOut={handleSignOut} />
-            </ProtectedRoute>
+            </UltimateProtectedRoute>
           }
         />
         <Route
           path="/diet-planner"
           element={
-            <ProtectedRoute user={user} isAuthChecking={isAuthChecking}>
+            <UltimateProtectedRoute user={user} isAuthChecking={isAuthChecking}>
               <DietPlannerPage user={user} onSignOut={handleSignOut} />
-            </ProtectedRoute>
+            </UltimateProtectedRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

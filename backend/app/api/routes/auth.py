@@ -27,12 +27,19 @@ class UserResponse(BaseModel):
     id: str
     name: str
     email: str
+    plan_tier: str = "free"
+    daily_msg_count: int = 0
     created_at: Optional[str] = None
 
 
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
+
+
+class PlanUpdateRequest(BaseModel):
+    user_id: str = Field(..., description="User ID to update")
+    plan_tier: str = Field(..., description="Target plan tier: free, pro, ultimate")
 
 
 @router.post("/register", response_model=AuthResponse)
@@ -91,6 +98,8 @@ def login_user(req: LoginRequest):
         "id": user["id"],
         "name": user["name"],
         "email": user["email"],
+        "plan_tier": user.get("plan_tier", "free"),
+        "daily_msg_count": user.get("daily_msg_count", 0),
         "created_at": user.get("created_at"),
     }
     return AuthResponse(
@@ -125,5 +134,24 @@ def get_current_user(authorization: Optional[str] = Header(None)):
         id=user["id"],
         name=user["name"],
         email=user["email"],
+        plan_tier=user.get("plan_tier", "free"),
+        daily_msg_count=user.get("daily_msg_count", 0),
         created_at=user.get("created_at"),
     )
+
+
+@router.post("/update-plan", response_model=UserResponse)
+def update_user_plan(req: PlanUpdateRequest):
+    """Update subscription plan tier for a user."""
+    try:
+        updated_user = user_repo.update_user_tier(req.user_id, req.plan_tier)
+        return UserResponse(
+            id=updated_user.get("id", req.user_id),
+            name=updated_user.get("name", "User"),
+            email=updated_user.get("email", ""),
+            plan_tier=updated_user.get("plan_tier", req.plan_tier),
+            daily_msg_count=updated_user.get("daily_msg_count", 0),
+            created_at=updated_user.get("created_at"),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

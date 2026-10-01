@@ -30,6 +30,16 @@ router = APIRouter(prefix="/api/diet-plan", tags=["diet-plan"])
 def generate_diet_plan_endpoint(profile: DietProfile) -> GeneratedDietPlan:
     """Generate a personalized diet plan based on user health profile."""
     try:
+        # Check plan tier: Diet & Nutrition Planner requires Ultimate Plan
+        if profile.user_id:
+            from backend.app.db.user_repository import user_repo
+            user_doc = user_repo.find_by_id(profile.user_id)
+            user_tier = user_doc.get("plan_tier", "free") if user_doc else "free"
+            if user_tier != "ultimate":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Diet & Nutrition Planner is exclusively available on the Ultimate Plan. Upgrade to Ultimate Plan to generate personalized biometric meal plans!",
+                )
         # Sanitize free-text user inputs to prevent injection or invalid characters
         if profile.food_preferences:
             clean_pref = sanitize_message(profile.food_preferences)

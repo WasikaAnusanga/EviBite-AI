@@ -139,6 +139,9 @@ class UserRepository:
             "name": name.strip(),
             "email": email_clean,
             "password_hash": hashed_pw,
+            "plan_tier": "free",
+            "daily_msg_count": 0,
+            "last_msg_date": "",
             "created_at": created_at,
         }
 
@@ -158,8 +161,88 @@ class UserRepository:
             "id": user_id,
             "name": user_doc["name"],
             "email": user_doc["email"],
+            "plan_tier": "free",
+            "daily_msg_count": 0,
             "created_at": created_at,
         }
+
+    def check_and_increment_daily_chat(self, user_id: str) -> tuple[bool, int, int]:
+        """Check if user can send a chat message under their current tier.
+        Returns tuple: (is_allowed, current_count, remaining_chats)
+        """
+        user = self.find_by_id(user_id)
+        if not user:
+            # Guest user - allow under free plan limits (10 msgs/day)
+            user = {
+                "id": "guest_user",
+                "plan_tier": "free",
+                "daily_msg_count": 0,
+                "last_msg_date": "",
+            }
+
+        plan_tier = user.get("plan_tier", "free")
+        
+        # Pro & Ultimate have unlimited chats
+        if plan_tier in {"pro", "ultimate"}:
+            return True, 0, 9999
+
+        # Free tier: 10 daily chats limit
+        today_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        last_date = user.get("last_msg_date", "")
+        current_count = user.get("daily_msg_count", 0)
+
+        # Reset count if it's a new calendar day
+        if last_date != today_str:
+            current_count = 0
+
+        FREE_LIMIT = 10
+        if current_count >= FREE_LIMIT:
+            return False, current_count, 0
+
+        # Increment count
+        new_count = current_count + 1
+        remaining = FREE_LIMIT - new_count
+
+        # Update in DB / memory
+        if self.collection is not None and user.get("id") != "guest_user":
+            try:
+                self.collection.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"daily_msg_count": new_count, "last_msg_date": today_str}}
+                )
+            except Exception as e:
+                logger.error(f"Error updating daily chat count: {e}")
+
+        if user.get("email") and user["email"] in self._memory_users:
+            self._memory_users[user["email"]]["daily_msg_count"] = new_count
+            self._memory_users[user["email"]]["last_msg_date"] = today_str
+
+        return True, new_count, remaining
+
+    def update_user_tier(self, user_id: str, plan_tier: str) -> Dict[str, Any]:
+        """Update user subscription plan tier (free, pro, ultimate)."""
+        valid_tiers = {"free", "pro", "ultimate"}
+        clean_tier = plan_tier.lower().strip()
+        if clean_tier not in valid_tiers:
+            raise ValueError(f"Invalid plan tier '{plan_tier}'. Must be one of {valid_tiers}")
+
+        if self.collection is not None:
+            try:
+                self.collection.update_one(
+                    {"id": user_id},
+                    {"$set": {"plan_tier": clean_tier}}
+                )
+            except Exception as e:
+                logger.error(f"Error updating user tier: {e}")
+
+        user = self.find_by_id(user_id)
+        if user:
+            user["plan_tier"] = clean_tier
+            if user.get("email") and user["email"] in self._memory_users:
+                self._memory_users[user["email"]]["plan_tier"] = clean_tier
+            return user
+        
+        return {"id": user_id, "plan_tier": clean_tier}
 
 
 # Singleton instance
