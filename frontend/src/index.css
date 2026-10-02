@@ -3464,24 +3464,99 @@ input:checked+.slider:before {
 .sidebar-diet-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  margin: 8px 12px 14px 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.14));
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #065f46;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  margin: 6px 0 14px 0;
+  border-radius: var(--radius-md);
+  background: #F4F9F1;
+  border: 1px solid #D5E7CF;
+  color: #1B241D;
+  font-family: inherit;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+  text-align: left;
 }
 
 .sidebar-diet-btn:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(5, 150, 105, 0.22));
-  border-color: #10b981;
+  background: #EAF4E6;
+  border-color: #46803A;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 3px 10px rgba(70, 128, 58, 0.12);
+}
+
+.sidebar-diet-btn .diet-btn-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sidebar-diet-btn .diet-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #E2EFE0;
+  color: #46803A;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.sidebar-diet-btn:hover .diet-icon-badge {
+  background: #46803A;
+  color: #FFFFFF;
+}
+
+.sidebar-diet-btn .diet-btn-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-diet-btn .diet-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #1B241D;
+  line-height: 1.2;
+}
+
+.sidebar-diet-btn .diet-subtitle {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #46803A;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.sidebar-diet-btn .diet-arrow {
+  color: #46803A;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-diet-btn:hover .diet-arrow {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.sidebar-diet-btn .tier-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #FFFFFF;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.2);
 }
 
 .diet-planner-layout {

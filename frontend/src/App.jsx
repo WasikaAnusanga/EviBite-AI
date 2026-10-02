@@ -294,18 +294,6 @@ function ChatDashboard({ user, onSignOut, onUpdateUser }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {planTier !== 'free' && (
-              <button
-                type="button"
-                className={`header-tier-pill ${planTier}`}
-                onClick={() => handleOpenPricing()}
-                title="Click to view subscription plans & upgrade"
-              >
-                <Sparkles size={13} />
-                <span>{planTier === 'ultimate' ? '👑 Ultimate' : '⚡ Pro Plan'}</span>
-              </button>
-            )}
-
             {!user && (
               <div className="header-auth-group">
                 <Link to="/login" className="auth-trigger-btn signin">

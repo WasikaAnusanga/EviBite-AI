@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, MessageSquare, ShieldCheck, Sparkles, Settings, LogOut, 
-  ChevronRight, ChevronUp, User, Sliders, HelpCircle, LogIn, UserPlus, Lock 
+  ChevronRight, ChevronUp, User, Sliders, HelpCircle, LogIn, UserPlus, Lock, ArrowRight 
 } from 'lucide-react';
 
 import logoImg from '../logo/logo.png';
@@ -65,25 +65,38 @@ export default function Sidebar({
         <span>New Chat</span>
       </button>
 
-      {/* Diet & Nutrition Planner Button with Lock Pill */}
+      {/* Diet & Nutrition Planner Button */}
       {planTier === 'ultimate' ? (
-        <Link to="/diet-plan" className="sidebar-diet-btn" style={{ textDecoration: 'none' }}>
-          <Sparkles size={16} className="text-emerald" />
-          <span>Diet & Nutrition Planner</span>
+        <Link to="/diet-plan" className="sidebar-diet-btn active-tier" style={{ textDecoration: 'none' }}>
+          <div className="diet-btn-left">
+            <div className="diet-icon-badge">
+              <Sparkles size={16} />
+            </div>
+            <div className="diet-btn-info">
+              <span className="diet-title">Diet Planner</span>
+              <span className="diet-subtitle">Personalized Nutrition</span>
+            </div>
+          </div>
+          <ArrowRight size={14} className="diet-arrow" />
         </Link>
       ) : (
         <button
           type="button"
-          className="sidebar-diet-btn sidebar-diet-locked"
+          className="sidebar-diet-btn locked-tier"
           onClick={() => onOpenPricing && onOpenPricing('ultimate')}
-          title="Diet Planner requires Ultimate Plan (Click to Upgrade)"
+          title="Diet & Nutrition Planner (Requires Ultimate Plan)"
         >
           <div className="diet-btn-left">
-            <Sparkles size={16} className="text-emerald" />
-            <span>Diet Planner</span>
+            <div className="diet-icon-badge">
+              <Sparkles size={16} />
+            </div>
+            <div className="diet-btn-info">
+              <span className="diet-title">Diet Planner</span>
+              <span className="diet-subtitle">Personalized Nutrition</span>
+            </div>
           </div>
-          <span className="tier-lock-pill">
-            <Lock size={11} /> Ultimate
+          <span className="tier-pill-badge">
+            <Lock size={10} /> Ultimate
           </span>
         </button>
       )}
