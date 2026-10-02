@@ -22,7 +22,7 @@ def chat_endpoint(request: ChatRequest) -> ChatResponse:
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for unlimited messages!",
+            detail="Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for high monthly AI usage!",
         )
 
     result = sanitize_message(request.message)
