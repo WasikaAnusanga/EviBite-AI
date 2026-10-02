@@ -24,14 +24,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
         if (!name.trim()) {
           throw new Error('Please enter your full name.');
         }
-        const res = await registerUser(name, email, password);
-        localStorage.setItem('evibite_auth_token', res.token);
-        localStorage.setItem('evibite_user', JSON.stringify(res.user));
-        setSuccessMsg('Account created successfully!');
+        await registerUser(name, email, password);
+        setSuccessMsg('Account created successfully! Please sign in with your password.');
+        setPassword('');
         setTimeout(() => {
-          onSuccess(res.user);
-          onClose();
-        }, 800);
+          setActiveTab('login');
+          setSuccessMsg('Account created successfully! Please sign in to continue.');
+        }, 1200);
       } else {
         const res = await loginUser(email, password);
         localStorage.setItem('evibite_auth_token', res.token);

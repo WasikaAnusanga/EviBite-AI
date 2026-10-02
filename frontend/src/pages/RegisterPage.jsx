@@ -4,7 +4,7 @@ import { registerUser } from '../services/api';
 import logoImg from '../logo/logo.png';
 import { Sparkles, User, Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
 
-export default function RegisterPage({ onRegisterSuccess }) {
+export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,8 +15,6 @@ export default function RegisterPage({ onRegisterSuccess }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-
-  const from = location.state?.from?.pathname || '/chat';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,14 +34,18 @@ export default function RegisterPage({ onRegisterSuccess }) {
     setIsSubmitting(true);
 
     try {
-      const res = await registerUser(name, email, password);
-      localStorage.setItem('evibite_auth_token', res.token);
-      localStorage.setItem('evibite_user', JSON.stringify(res.user));
-      setSuccessMsg('Account registered successfully! Redirecting...');
-      if (onRegisterSuccess) onRegisterSuccess(res.user);
+      await registerUser(name, email, password);
+      setSuccessMsg('Account registered successfully! Redirecting to login page...');
       setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 1000);
+        navigate('/login', {
+          state: {
+            from: location.state?.from,
+            registeredEmail: email,
+            infoMsg: 'Account created successfully! Please sign in with your email and password.',
+          },
+          replace: true,
+        });
+      }, 1200);
     } catch (err) {
       setError(err.message || 'Registration failed. Please check your details.');
     } finally {

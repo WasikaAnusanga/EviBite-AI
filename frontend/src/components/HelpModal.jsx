@@ -227,8 +227,8 @@ export default function HelpModal({ isOpen, onClose }) {
                   <div className="contact-row">
                     <BookOpen size={18} className="text-cyan" />
                     <div>
-                      <strong>Platform Version</strong>
-                      <p>EviBite AI v2.4 (Collaborative Multi-Agent Architecture)</p>
+                      <strong>Platform Engine</strong>
+                      <p>EviBite AI (Collaborative Multi-Agent Architecture)</p>
                     </div>
                   </div>
 

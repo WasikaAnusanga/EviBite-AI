@@ -560,7 +560,7 @@ export default function App() {
         />
         <Route
           path="/register"
-          element={<RegisterPage onRegisterSuccess={(userData) => setUser(userData)} />}
+          element={<RegisterPage />}
         />
         <Route
           path="/diet-plan"

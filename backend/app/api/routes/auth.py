@@ -32,6 +32,11 @@ class UserResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+class RegisterResponse(BaseModel):
+    message: str = "User registered successfully"
+    user: UserResponse
+
+
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
@@ -42,9 +47,9 @@ class PlanUpdateRequest(BaseModel):
     plan_tier: str = Field(..., description="Target plan tier: free, pro, ultimate")
 
 
-@router.post("/register", response_model=AuthResponse)
+@router.post("/register", response_model=RegisterResponse)
 def register_user(req: RegisterRequest):
-    """Register a new user in MongoDB and return JWT token."""
+    """Register a new user in MongoDB without automatically logging them in."""
     email_clean = req.email.lower().strip()
     if user_repo.find_by_email(email_clean):
         raise HTTPException(
@@ -58,13 +63,8 @@ def register_user(req: RegisterRequest):
             email=email_clean,
             password=req.password,
         )
-        token = user_repo.create_token(
-            user_id=user_info["id"],
-            email=user_info["email"],
-            name=user_info["name"],
-        )
-        return AuthResponse(
-            token=token,
+        return RegisterResponse(
+            message="User registered successfully. Please log in with your credentials.",
             user=UserResponse(**user_info),
         )
     except Exception as e:

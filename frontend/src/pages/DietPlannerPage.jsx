@@ -342,11 +342,8 @@ export default function DietPlannerPage({ user, onSignOut }) {
       <header className="landing-nav">
         <div className="landing-nav-container">
           <div className="landing-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-            <div className="brand-icon">
-              <Sparkles size={18} color="#10b981" />
-            </div>
+            <img src={logoImg} alt="EviBite AI Logo" className="landing-logo-img" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
             <span className="brand-title">EviBite AI</span>
-            <span className="version-badge">v2.4</span>
           </div>
 
 

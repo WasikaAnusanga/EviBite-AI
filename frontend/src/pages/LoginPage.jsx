@@ -5,13 +5,14 @@ import logoImg from '../logo/logo.png';
 import { Sparkles, Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess }) {
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const [email, setEmail] = useState(location.state?.registeredEmail || location.state?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
+  const [infoMsg, setInfoMsg] = useState(location.state?.infoMsg || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const from = location.state?.from?.pathname || '/chat';
   const isDietRedirect = from.includes('diet');
@@ -88,7 +89,29 @@ export default function LoginPage({ onLoginSuccess }) {
               <p>Welcome back! Please enter your details.</p>
             </div>
 
-            {isDietRedirect && (
+            {infoMsg && (
+              <div 
+                className="auth-alert success" 
+                style={{ 
+                  background: '#f0fdf4', 
+                  border: '1.5px solid #86efac', 
+                  color: '#166534',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: '500'
+                }}
+              >
+                <CheckCircle2 size={18} className="text-emerald" style={{ flexShrink: 0 }} />
+                <span>{infoMsg}</span>
+              </div>
+            )}
+
+            {isDietRedirect && !infoMsg && (
               <div 
                 className="auth-alert info" 
                 style={{ 

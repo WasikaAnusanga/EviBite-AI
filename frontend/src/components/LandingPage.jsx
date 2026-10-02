@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import logoImg from '../logo/logo.png';
 import { 
   ShieldCheck, 
   Sparkles, 
@@ -160,11 +161,8 @@ export default function LandingPage({ user, onSignOut }) {
       <header className="landing-nav">
         <div className="landing-nav-container">
           <div className="landing-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} style={{ cursor: 'pointer' }}>
-            <div className="brand-icon">
-              <Sparkles size={18} color="#10b981" />
-            </div>
+            <img src={logoImg} alt="EviBite AI Logo" className="landing-logo-img" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
             <span className="brand-title">EviBite AI</span>
-            <span className="version-badge">v2.4</span>
           </div>
 
           {/* Desktop Navigation Links */}
@@ -237,7 +235,7 @@ export default function LandingPage({ user, onSignOut }) {
                   Sign In
                 </button>
                 <button className="btn-primary" onClick={handleTryClick}>
-                  Try Free <ArrowRight size={16} />
+                  Sign Up <ArrowRight size={16} />
                 </button>
               </>
             )}
@@ -285,7 +283,7 @@ export default function LandingPage({ user, onSignOut }) {
                     Sign In
                   </button>
                   <button className="btn-primary full-width" onClick={() => { setMobileMenuOpen(false); handleTryClick(); }}>
-                    Try Free <ArrowRight size={16} />
+                    Sign Up <ArrowRight size={16} />
                   </button>
                 </>
               )}
@@ -685,9 +683,7 @@ export default function LandingPage({ user, onSignOut }) {
         <div className="footer-container">
           <div className="footer-col brand-col">
             <div className="landing-brand">
-              <div className="brand-icon">
-                <Sparkles size={18} color="#10b981" />
-              </div>
+              <img src={logoImg} alt="EviBite AI Logo" className="landing-logo-img" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
               <span className="brand-title">EviBite AI</span>
             </div>
             <p className="footer-desc">
