@@ -117,17 +117,18 @@ export default function DietPlannerPage({ user, onSignOut }) {
   }, [planToDelete, isDeletingPlan, isSavedPlansOpen]);
 
   // Form State
+  // Form State - Empty biometrics so user enters their own data cleanly without autofill
   const [formData, setFormData] = useState({
-    age: 25,
-    gender: 'male',
-    height: 175,
-    weight: 70,
-    goal: 'muscle_gain',
+    age: '',
+    gender: '',
+    height: '',
+    weight: '',
+    goal: 'weight_loss',
     activity: 'moderate_activity',
-    diet: 'high_protein',
+    diet: 'non_vegetarian',
     allergies: [],
     health_conditions: ['none'],
-    food_preferences: 'Oats, chicken, brown rice, greek yogurt',
+    food_preferences: '',
     foods_to_avoid: '',
     budget: 'medium',
     meal_frequency: '3_meals',
@@ -135,11 +136,19 @@ export default function DietPlannerPage({ user, onSignOut }) {
     country: 'United States',
   });
 
-  // Calculate live BMI
-  const heightM = (Number(formData.height) || 170) / 100;
-  const liveBmi = ((Number(formData.weight) || 70) / (heightM * heightM)).toFixed(1);
+  const [errors, setErrors] = useState({});
+
+  // Calculate live BMI safely when height and weight are provided
+  const parsedHeight = parseFloat(formData.height);
+  const parsedWeight = parseFloat(formData.weight);
+  const hasValidBmi = !isNaN(parsedHeight) && parsedHeight >= 80 && !isNaN(parsedWeight) && parsedWeight >= 25;
+  const liveBmi = hasValidBmi 
+    ? (parsedWeight / ((parsedHeight / 100) ** 2)).toFixed(1) 
+    : '--';
+
   const getBmiCategory = (bmi) => {
     const num = parseFloat(bmi);
+    if (isNaN(num)) return { label: 'Enter height & weight', color: '#64748b', bg: '#f1f5f9', pos: '0%' };
     if (num < 18.5) return { label: 'Underweight', color: '#f59e0b', bg: '#fef3c7', pos: '15%' };
     if (num < 25) return { label: 'Normal weight', color: '#10b981', bg: '#ecfdf5', pos: '40%' };
     if (num < 30) return { label: 'Overweight', color: '#f97316', bg: '#ffedd5', pos: '68%' };
@@ -147,8 +156,79 @@ export default function DietPlannerPage({ user, onSignOut }) {
   };
   const bmiInfo = getBmiCategory(liveBmi);
 
+  const validateStep = (step) => {
+    const errs = {};
+
+    if (step === 1) {
+      const ageNum = parseInt(formData.age, 10);
+      if (!formData.age || isNaN(ageNum)) {
+        errs.age = 'Please enter your age';
+      } else if (ageNum < 10 || ageNum > 120) {
+        errs.age = 'Age must be between 10 and 120 years';
+      }
+
+      if (!formData.gender) {
+        errs.gender = 'Please select your biological gender';
+      }
+
+      const heightNum = parseFloat(formData.height);
+      if (!formData.height || isNaN(heightNum)) {
+        errs.height = 'Please enter your height';
+      } else if (heightNum < 80 || heightNum > 250) {
+        errs.height = 'Height must be between 80 and 250 cm';
+      }
+
+      const weightNum = parseFloat(formData.weight);
+      if (!formData.weight || isNaN(weightNum)) {
+        errs.weight = 'Please enter your weight';
+      } else if (weightNum < 25 || weightNum > 300) {
+        errs.weight = 'Weight must be between 25 and 300 kg';
+      }
+
+      if (!formData.country) {
+        errs.country = 'Please select your country or regional market';
+      }
+    }
+
+    if (step === 2) {
+      if (!formData.goal) errs.goal = 'Please select a primary health goal';
+      if (!formData.activity) errs.activity = 'Please select your daily physical activity level';
+    }
+
+    if (step === 3) {
+      if (!formData.diet) errs.diet = 'Please select your dietary lifestyle';
+    }
+
+    if (step === 4) {
+      if (!formData.budget) errs.budget = 'Please select a budget tier';
+      if (!formData.meal_frequency) errs.meal_frequency = 'Please select meal cadence';
+      if (!formData.cooking_preference) errs.cooking_preference = 'Please select cooking preference';
+    }
+
+    return errs;
+  };
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => {
+        const updated = { ...prev };
+        delete updated[field];
+        return updated;
+      });
+    }
+  };
+
+  const goToStep = (targetStep) => {
+    if (targetStep > currentStep) {
+      const stepErrors = validateStep(currentStep);
+      if (Object.keys(stepErrors).length > 0) {
+        setErrors(stepErrors);
+        return;
+      }
+    }
+    setErrors({});
+    setCurrentStep(targetStep);
   };
 
   const toggleAllergy = (allergy) => {
@@ -175,6 +255,18 @@ export default function DietPlannerPage({ user, onSignOut }) {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+
+    // Validate all steps (1 to 4) before generating
+    for (let s = 1; s <= 4; s++) {
+      const stepErrors = validateStep(s);
+      if (Object.keys(stepErrors).length > 0) {
+        setErrors(stepErrors);
+        setCurrentStep(s);
+        setError(`Please fill in all required fields in Step ${s} before generating your plan.`);
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError(null);
     setLoadingStep(1);
@@ -967,9 +1059,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                   <button
                     key={s.step}
                     type="button"
-                    onClick={() => {
-                      if (currentStep > s.step) setCurrentStep(s.step);
-                    }}
+                    onClick={() => goToStep(s.step)}
                     className={`step-card ${currentStep === s.step ? 'active' : currentStep > s.step ? 'completed' : 'pending'}`}
                   >
                     <div className="step-card-top">
@@ -984,7 +1074,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                 ))}
               </div>
 
-              <form onSubmit={handleSubmit} className="diet-wizard-form">
+              <form onSubmit={handleSubmit} className="diet-wizard-form" noValidate>
                 {/* STEP 1: BIOMETRICS */}
                 {currentStep === 1 && (
                   <div className="step-content animate-slide">
@@ -1000,25 +1090,30 @@ export default function DietPlannerPage({ user, onSignOut }) {
                       {/* Row 1: Age & Biological Gender */}
                       <div className="form-row-2">
                         <div className="form-group">
-                          <label className="form-label">Age (years)</label>
-                          <div className="input-with-unit">
+                          <label className="form-label">Age (years) <span className="text-emerald">*</span></label>
+                          <div className={`input-with-unit ${errors.age ? 'has-error' : ''}`}>
                             <input 
                               type="number" 
                               min="10" 
-                              max="110" 
+                              max="120" 
                               value={formData.age} 
                               onChange={(e) => handleInputChange('age', e.target.value)}
-                              className="form-input"
-                              placeholder="25"
-                              required 
+                              className={`form-input ${errors.age ? 'has-error' : ''}`}
+                              placeholder="e.g. 25"
                             />
                             <span className="input-unit-badge">yrs</span>
                           </div>
+                          {errors.age && (
+                            <span className="form-field-error">
+                              <AlertTriangle size={12} />
+                              <span>{errors.age}</span>
+                            </span>
+                          )}
                         </div>
 
                         <div className="form-group">
-                          <label className="form-label">Biological Gender</label>
-                          <div className="segmented-control">
+                          <label className="form-label">Biological Gender <span className="text-emerald">*</span></label>
+                          <div className={`segmented-control ${errors.gender ? 'has-error' : ''}`}>
                             {['male', 'female', 'other'].map(g => (
                               <button
                                 key={g}
@@ -1030,43 +1125,59 @@ export default function DietPlannerPage({ user, onSignOut }) {
                               </button>
                             ))}
                           </div>
+                          {errors.gender && (
+                            <span className="form-field-error">
+                              <AlertTriangle size={12} />
+                              <span>{errors.gender}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* Row 2: Height & Weight */}
                       <div className="form-row-2">
                         <div className="form-group">
-                          <label className="form-label">Height (cm)</label>
-                          <div className="input-with-unit">
+                          <label className="form-label">Height (cm) <span className="text-emerald">*</span></label>
+                          <div className={`input-with-unit ${errors.height ? 'has-error' : ''}`}>
                             <input 
                               type="number" 
-                              min="90" 
-                              max="240" 
+                              min="80" 
+                              max="250" 
                               value={formData.height} 
                               onChange={(e) => handleInputChange('height', e.target.value)}
-                              className="form-input"
-                              placeholder="175"
-                              required 
+                              className={`form-input ${errors.height ? 'has-error' : ''}`}
+                              placeholder="e.g. 175"
                             />
                             <span className="input-unit-badge">cm</span>
                           </div>
+                          {errors.height && (
+                            <span className="form-field-error">
+                              <AlertTriangle size={12} />
+                              <span>{errors.height}</span>
+                            </span>
+                          )}
                         </div>
 
                         <div className="form-group">
-                          <label className="form-label">Weight (kg)</label>
-                          <div className="input-with-unit">
+                          <label className="form-label">Weight (kg) <span className="text-emerald">*</span></label>
+                          <div className={`input-with-unit ${errors.weight ? 'has-error' : ''}`}>
                             <input 
                               type="number" 
-                              min="30" 
-                              max="260" 
+                              min="25" 
+                              max="300" 
                               value={formData.weight} 
                               onChange={(e) => handleInputChange('weight', e.target.value)}
-                              className="form-input"
-                              placeholder="70"
-                              required 
+                              className={`form-input ${errors.weight ? 'has-error' : ''}`}
+                              placeholder="e.g. 70"
                             />
                             <span className="input-unit-badge">kg</span>
                           </div>
+                          {errors.weight && (
+                            <span className="form-field-error">
+                              <AlertTriangle size={12} />
+                              <span>{errors.weight}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1081,7 +1192,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                             <div className="bmi-cat-name" style={{ color: bmiInfo.color }}>
                               {bmiInfo.label}
                             </div>
-                            <span className="bmi-cat-subtext">WHO Clinical Classification</span>
+                            <span className="bmi-cat-subtext">{hasValidBmi ? 'WHO Clinical Classification' : 'Enter height & weight to calculate'}</span>
                           </div>
                         </div>
 
@@ -1091,11 +1202,13 @@ export default function DietPlannerPage({ user, onSignOut }) {
                             <div className="scale-segment normal" title="Normal (18.5-24.9)">Normal</div>
                             <div className="scale-segment over" title="Overweight (25-29.9)">Over</div>
                             <div className="scale-segment obese" title="Obese (≥30)">Obese</div>
-                            <div 
-                              className="scale-pin" 
-                              style={{ left: bmiInfo.pos }}
-                              title={`Current BMI: ${liveBmi}`}
-                            />
+                            {hasValidBmi && (
+                              <div 
+                                className="scale-pin" 
+                                style={{ left: bmiInfo.pos }}
+                                title={`Current BMI: ${liveBmi}`}
+                              />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1112,7 +1225,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                             id="country-select"
                             value={formData.country}
                             onChange={(e) => handleInputChange('country', e.target.value)}
-                            className="form-select country-dropdown"
+                            className={`form-select country-dropdown ${errors.country ? 'has-error' : ''}`}
                           >
                             <option value="United States">🇺🇸 United States (US Supermarkets & Brands)</option>
                             <option value="United Kingdom">🇬🇧 United Kingdom (UK Supermarkets & Brands)</option>
@@ -1125,6 +1238,12 @@ export default function DietPlannerPage({ user, onSignOut }) {
                             <option value="Global">🌎 Global / International (All Supermarket Products)</option>
                           </select>
                         </div>
+                        {errors.country && (
+                          <span className="form-field-error">
+                            <AlertTriangle size={12} />
+                            <span>{errors.country}</span>
+                          </span>
+                        )}
                         <p className="country-select-hint">
                           The AI Dietitian will prioritize products and portion sizes stocked in {formData.country} grocery stores.
                         </p>
@@ -1134,7 +1253,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     <div className="step-nav-bar right-only">
                       <button 
                         type="button" 
-                        onClick={() => setCurrentStep(2)} 
+                        onClick={() => goToStep(2)} 
                         className="btn-step-next"
                       >
                         <span>Continue to Goals & Activity</span>
@@ -1219,11 +1338,11 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     </div>
 
                     <div className="step-nav-bar">
-                      <button type="button" onClick={() => setCurrentStep(1)} className="btn-step-prev">
+                      <button type="button" onClick={() => goToStep(1)} className="btn-step-prev">
                         <ArrowLeft size={16} />
                         <span>Back</span>
                       </button>
-                      <button type="button" onClick={() => setCurrentStep(3)} className="btn-step-next">
+                      <button type="button" onClick={() => goToStep(3)} className="btn-step-next">
                         <span>Continue to Diet & Allergies</span>
                         <ArrowRight size={16} />
                       </button>
@@ -1378,11 +1497,11 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     </div>
 
                     <div className="step-nav-bar">
-                      <button type="button" onClick={() => setCurrentStep(2)} className="btn-step-prev">
+                      <button type="button" onClick={() => goToStep(2)} className="btn-step-prev">
                         <ArrowLeft size={16} />
                         <span>Back</span>
                       </button>
-                      <button type="button" onClick={() => setCurrentStep(4)} className="btn-step-next">
+                      <button type="button" onClick={() => goToStep(4)} className="btn-step-next">
                         <span>Continue to Preferences & Routine</span>
                         <ArrowRight size={16} />
                       </button>
@@ -1498,7 +1617,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
                     </div>
 
                     <div className="step-nav-bar mt-8">
-                      <button type="button" onClick={() => setCurrentStep(3)} className="btn-step-prev">
+                      <button type="button" onClick={() => goToStep(3)} className="btn-step-prev">
                         <ArrowLeft size={16} />
                         <span>Back</span>
                       </button>
