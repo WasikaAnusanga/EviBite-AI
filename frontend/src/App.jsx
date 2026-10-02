@@ -319,7 +319,7 @@ function ChatDashboard({ user, onSignOut, onUpdateUser }) {
               )}
               <span>
                 {isLimitActive ? (
-                  <><strong>Daily Limit Reached:</strong> Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for unlimited messages!</>
+                  <><strong>Daily Limit Reached:</strong> Free Tier Daily Limit Reached (10/10 messages used today). Upgrade to Pro or Ultimate Plan for high monthly AI usage!</>
                 ) : (
                   <><strong>Starter Plan:</strong> 10 daily chats limit • PDF Recipe Upload & Diet Planner Locked</>
                 )}
