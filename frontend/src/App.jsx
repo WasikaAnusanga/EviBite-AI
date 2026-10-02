@@ -44,15 +44,18 @@ function ChatDashboard({ user, onSignOut, onUpdateUser }) {
   };
 
   const handleSelectTier = async (newTier) => {
-    try {
-      if (user && user.id) {
-        const updated = await updateUserPlan(user.id, newTier);
-        if (onUpdateUser) onUpdateUser({ ...user, plan_tier: newTier });
-      } else {
-        if (onUpdateUser) onUpdateUser({ ...(user || {}), plan_tier: newTier });
+    setIsLimitReached(false);
+    const updatedUser = { ...(user || {}), plan_tier: newTier };
+    if (onUpdateUser) {
+      onUpdateUser(updatedUser);
+    }
+    const uid = user?.id || user?._id || user?.email;
+    if (uid && uid !== 'guest_user') {
+      try {
+        await updateUserPlan(uid, newTier);
+      } catch (err) {
+        console.error('Backend plan update failed:', err);
       }
-    } catch (err) {
-      console.error('Plan update failed:', err);
     }
   };
 

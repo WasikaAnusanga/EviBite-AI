@@ -466,12 +466,19 @@ export default function PricingModal({ isOpen, onClose, currentTier = 'free', ta
 
     setIsProcessingPayment(true);
 
-    setTimeout(() => {
-      onSelectTier(selectedPlanForCheckout.id);
-      setUpgradedPlan(selectedPlanForCheckout);
-      setIsProcessingPayment(false);
-      setSelectedPlanForCheckout(null);
-    }, 1100);
+    setTimeout(async () => {
+      try {
+        if (onSelectTier) {
+          await onSelectTier(selectedPlanForCheckout.id);
+        }
+      } catch (err) {
+        console.error('Tier upgrade error:', err);
+      } finally {
+        setUpgradedPlan(selectedPlanForCheckout);
+        setIsProcessingPayment(false);
+        setSelectedPlanForCheckout(null);
+      }
+    }, 800);
   };
 
   const renderCellContent = (val, tier) => {
