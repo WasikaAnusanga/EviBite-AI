@@ -57,6 +57,14 @@ export default function ChatInput({ onSendMessage, disabled, planTier = 'free', 
     }
   };
 
+  const handleBoxClick = (e) => {
+    if (disabled) return;
+    if (e.target.closest('button') || e.target.closest('input[type="file"]') || e.target.closest('.file-preview-badge')) {
+      return;
+    }
+    textareaRef.current?.focus();
+  };
+
   return (
     <div className="input-container">
       {selectedFile && (
@@ -72,8 +80,7 @@ export default function ChatInput({ onSendMessage, disabled, planTier = 'free', 
         </div>
       )}
 
-
-      <form onSubmit={handleSubmit} className="input-box">
+      <form onSubmit={handleSubmit} className="input-box" onClick={handleBoxClick}>
         <input
           type="file"
           ref={fileInputRef}

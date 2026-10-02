@@ -772,10 +772,11 @@ body {
   border-radius: var(--radius-lg);
   padding: 10px 14px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
   box-shadow: var(--shadow-card);
   transition: all 0.2s ease;
+  cursor: text;
 }
 
 .input-box:focus-within {
