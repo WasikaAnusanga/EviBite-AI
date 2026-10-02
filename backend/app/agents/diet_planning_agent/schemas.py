@@ -57,6 +57,7 @@ class CookingPreference(str, Enum):
 
 class DietProfile(BaseModel):
     """User profile input submitted from the frontend form."""
+    user_id: Optional[str] = Field(default=None, description="Optional user ID for tier verification and saving")
     age: int = Field(..., ge=10, le=120, description="Age in years")
     gender: Gender = Field(..., description="Gender (male, female, other)")
     height: float = Field(..., ge=80, le=250, description="Height in centimeters")

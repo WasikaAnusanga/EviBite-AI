@@ -34,6 +34,8 @@ def generate_diet_plan_endpoint(profile: DietProfile) -> GeneratedDietPlan:
         if profile.user_id:
             from backend.app.db.user_repository import user_repo
             user_doc = user_repo.find_by_id(profile.user_id)
+            if not user_doc and "@" in str(profile.user_id):
+                user_doc = user_repo.find_by_email(str(profile.user_id))
             user_tier = user_doc.get("plan_tier", "free") if user_doc else "free"
             if user_tier != "ultimate":
                 raise HTTPException(

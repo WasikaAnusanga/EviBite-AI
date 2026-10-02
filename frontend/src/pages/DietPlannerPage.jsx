@@ -202,6 +202,7 @@ export default function DietPlannerPage({ user, onSignOut }) {
       }
 
       const payload = {
+        user_id: userId,
         age: parseInt(formData.age, 10),
         gender: formData.gender,
         height: parseFloat(formData.height),
